@@ -12,9 +12,12 @@ services:
       context: .
       dockerfile: Dockerfile
     image: my-dev-box:latest
-    # Build locally when the image is missing instead of trying to pull it
-    # from Docker Hub (the "my-dev-box" name isn't a real registry image).
-    pull_policy: build
+    # Compose's default pull_policy ("missing") still tries a registry pull
+    # first even when a `build` section is present, only falling back to
+    # building on failure. "never" skips that pull attempt entirely and
+    # goes straight to build (only if the image is missing) or reusing the
+    # cached local image.
+    pull_policy: never
     # Container always runs as root.
     user: root
     working_dir: /root/Main/Everything
