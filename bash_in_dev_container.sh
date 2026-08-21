@@ -8,7 +8,7 @@ IMAGE="my-dev-box:latest"
 # 1. Build the image only if it doesn't exist yet (reused across every
 #    copy of this directory, since the image tag is fixed).
 if ! sudo docker image inspect "$IMAGE" >/dev/null 2>&1; then
-  sudo docker compose build
+  sudo env DEV_BOX_WRAPPER=1 docker compose build
 fi
 
 # 2. Seed ./root from the image's baked-in /root on first run only, before
@@ -21,4 +21,4 @@ if [ ! -d ./root ]; then
 fi
 
 # 3. Run the dev container as before.
-sudo docker compose run --rm my-dev-container bash
+sudo env DEV_BOX_WRAPPER=1 docker compose run --rm my-dev-container bash

@@ -1,10 +1,15 @@
-# Bring the dev box up on demand:
+# Bring the dev box up on demand via ./bash_in_dev_container.sh — do not call
+# `docker compose` directly. `run --rm` starts a fresh throwaway container
+# each time and removes it on exit, so nothing lingers. All persistent state
+# lives in the bind mounts below (./root and ./Everything), not in the
+# container itself.
 #
-#   docker compose run --rm my-dev-container bash
-#
-# `run --rm` starts a fresh throwaway container each time and removes it on
-# exit, so nothing lingers. All persistent state lives in the bind mounts
-# below (./root and ./Everything), not in the container itself.
+# The x-require-wrapper line below is not a real service option — it's a
+# guard: Compose does env var substitution on every string in this file
+# (including custom x- fields) before doing anything else, so an unset
+# DEV_BOX_WRAPPER makes any direct `docker compose ...` invocation fail
+# immediately with the message below. Only the wrapper script sets that var.
+x-require-wrapper: "${DEV_BOX_WRAPPER:?Use ./bash_in_dev_container.sh instead of calling docker compose directly}"
 
 services:
   my-dev-container:
