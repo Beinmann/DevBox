@@ -1,0 +1,29 @@
+# Bring the dev box up on demand:
+#
+#   docker compose run --rm my-dev-container bash
+#
+# `run --rm` starts a fresh throwaway container each time and removes it on
+# exit, so nothing lingers. All persistent state lives in the bind mounts
+# below (./root and ./Everything), not in the container itself.
+
+services:
+  my-dev-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: my-dev-box:latest
+    # Container always runs as root.
+    user: root
+    working_dir: /root/Main/Everything
+    # Give an interactive shell / tmux a proper TTY.
+    stdin_open: true
+    tty: true
+    # Larger shared memory + no PID limits help heavier dev workloads.
+    init: true
+    volumes:
+      # Persist the whole user home (dotfiles, shell history, ~/.claude, caches).
+      - ./root:/root
+      # Project workspace, mounted where WORKDIR expects it.
+      - ./Everything:/root/Main/Everything
+    environment:
+      - TERM=xterm-256color

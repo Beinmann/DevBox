@@ -1,0 +1,5 @@
+# Nothing from the build context needs to enter the image — everything the
+# container uses comes in via bind mounts at runtime. Keep the context tiny
+# so builds are fast.
+*
+!Dockerfile
