@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         # python
         python3 python3-dev python3-venv python3-pip pipx \
         # handy CLI dev tools
-        ripgrep fd-find fzf jq less tree unzip zip \
+        ripgrep fd-find fzf jq less tree unzip zip moreutils \
         htop vim nano rsync man-db locales sudo \
         # required by dotfilesv3 (base/ai/nvim/vim/scripts modules)
         stow ranger bc \
