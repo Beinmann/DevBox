@@ -50,6 +50,12 @@ RUN ln -s "$(command -v fdfind)" /usr/local/bin/fd
 ARG USER_UID=1000
 ARG USER_GID=1000
 
+# Ubuntu's base image ships a preexisting `ubuntu` user/group at 1000:1000
+# (for cloud-init) which collides with the default (and most common host)
+# USER_UID/USER_GID of 1000 — remove it first so groupadd/useradd below
+# don't fail with "GID/UID already exists".
+RUN userdel -r ubuntu 2>/dev/null; groupdel ubuntu 2>/dev/null; true
+
 RUN groupadd --gid "$USER_GID" dev \
     && useradd --uid "$USER_UID" --gid "$USER_GID" --create-home --shell /bin/bash dev \
     && passwd -d dev \
