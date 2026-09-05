@@ -99,10 +99,15 @@ RUN curl -fsSL https://github.com/neovim/neovim/releases/latest/download/nvim-li
 # Installed under $HOME=/opt/... (not root's actual home) and symlinked into
 # /usr/local/bin, so the `dev` user isn't blocked from following the symlink
 # by root's home directory being 0700.
-RUN HOME=/opt/claude-install curl -fsSL https://claude.ai/install.sh | bash -s latest \
+# NOTE: `HOME=... curl ... | bash` only sets HOME for `curl`, not for the
+# `bash` that actually runs the installer (env assignments apply to just the
+# first command in a pipeline) — so the install silently lands in the real
+# HOME instead. Wrap the whole pipeline in `bash -c '...'` so HOME applies to
+# both halves.
+RUN HOME=/opt/claude-install bash -c 'curl -fsSL https://claude.ai/install.sh | bash -s latest' \
     && chmod -R a+rX /opt/claude-install \
     && ln -s /opt/claude-install/.local/bin/claude /usr/local/bin/claude
-RUN HOME=/opt/opencode-install curl -fsSL https://opencode.ai/install | bash \
+RUN HOME=/opt/opencode-install bash -c 'curl -fsSL https://opencode.ai/install | bash' \
     && chmod -R a+rX /opt/opencode-install \
     && ln -s /opt/opencode-install/.opencode/bin/opencode /usr/local/bin/opencode
 
