@@ -1,8 +1,8 @@
 # Bring the dev box up on demand via ./bash_in_dev_container.sh — do not call
-# `docker compose` directly. `run --rm` starts a fresh throwaway container
-# each time and removes it on exit, so nothing lingers. All persistent state
-# lives in the bind mounts below (./root and ./Everything), not in the
-# container itself.
+# `docker compose` directly. The container persists across exits (`up -d` +
+# `exec`) until explicitly torn down via ./stop_dev_container.sh. All
+# persistent state lives in the bind mounts below (./home and ./Everything),
+# not in the container itself.
 #
 # The x-require-wrapper line below is not a real service option — it's a
 # guard: Compose does env var substitution on every string in this file
@@ -23,18 +23,25 @@ services:
     # goes straight to build (only if the image is missing) or reusing the
     # cached local image.
     pull_policy: never
-    # Container always runs as root.
-    user: root
-    working_dir: /root/Main/Everything
+    # Container runs as the unprivileged `dev` user (see Dockerfile), not root.
+    user: dev
+    working_dir: /home/dev/Main/Everything
     # Give an interactive shell / tmux a proper TTY.
     stdin_open: true
     tty: true
     # Larger shared memory + no PID limits help heavier dev workloads.
     init: true
+    # Never auto-restart — the container persists across `up -d` calls but
+    # only comes back up when the wrapper script explicitly brings it up.
+    restart: "no"
+    # Long-running idle process so `up -d` has something to keep alive.
+    # Interactive shells attach separately via `docker compose exec`, which
+    # doesn't depend on this process.
+    command: sleep infinity
     volumes:
       # Persist the whole user home (dotfiles, shell history, ~/.claude, caches).
-      - ./root:/root
+      - ./home:/home/dev
       # Project workspace, mounted where WORKDIR expects it.
-      - ./Everything:/root/Main/Everything
+      - ./Everything:/home/dev/Main/Everything
     environment:
       - TERM=xterm-256color
