@@ -16,6 +16,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # Only used the (rare) time Compose actually builds — on first run, or
+      # after ./rebuild_image_after_change.sh. bash_in_dev_container.sh
+      # exports these from the host so the container's `dev` user matches
+      # you; default here only covers a bare `docker compose build`.
+      args:
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
     image: my-dev-box-v2
     # Compose's default pull_policy ("missing") still tries a registry pull
     # first even when a `build` section is present, only falling back to
