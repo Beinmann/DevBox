@@ -30,9 +30,11 @@ cd DevBox
 
 That single script:
 
-1. Builds the image if it isn't already built (`my-dev-box:latest`),
-   passing your host UID/GID as build args so the container's `dev` user
-   matches you and files it creates land with your ownership on the host.
+1. Builds the image (`my-dev-box:v2`), passing your host UID/GID as build
+   args so the container's `dev` user matches you and files it creates land
+   with your ownership on the host. Docker's layer cache makes this a fast
+   no-op when the Dockerfile and build args haven't changed since the last
+   build.
 2. On the very first run only, seeds `./home` from the image's built-in
    `/home/dev` (this is what makes `claude`/`opencode`, installed at build
    time, available at runtime — see [Why the wrapper script?](#why-the-wrapper-script)).

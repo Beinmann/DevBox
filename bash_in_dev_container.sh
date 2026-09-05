@@ -3,18 +3,18 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-IMAGE="my-dev-box:latest"
+IMAGE="my-dev-box:v2"
 
-# 1. Build the image only if it doesn't exist yet (reused across every
-#    copy of this directory, since the image tag is fixed). Pass the actual
-#    host UID/GID so the `dev` user inside the container matches the host
-#    user, and files created in the container end up owned by you on the
-#    host instead of some arbitrary container UID.
-if ! sudo docker image inspect "$IMAGE" >/dev/null 2>&1; then
-  echo "==> Image $IMAGE not found, building..."
-  sudo env DEV_BOX_WRAPPER=1 docker compose build \
-    --build-arg USER_UID="$(id -u)" --build-arg USER_GID="$(id -g)"
-fi
+# 1. Always build — Docker's layer cache makes this a fast no-op when the
+#    Dockerfile and build args haven't changed, and it prevents silently
+#    reusing a stale image left over under this fixed tag from a previous
+#    Dockerfile version (e.g. one without a /home/dev, which would break
+#    step 2 below). Pass the actual host UID/GID so the `dev` user inside
+#    the container matches the host user, and files created in the
+#    container end up owned by you on the host instead of some arbitrary
+#    container UID.
+sudo env DEV_BOX_WRAPPER=1 docker compose build \
+  --build-arg USER_UID="$(id -u)" --build-arg USER_GID="$(id -g)"
 
 # 2. Seed ./home from the image's baked-in /home/dev on first run only,
 #    before the bind mount in docker-compose.yml would otherwise shadow it.
