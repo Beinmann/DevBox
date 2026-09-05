@@ -50,7 +50,17 @@ if [ ! -d ./Everything ]; then
   mkdir -p ./Everything
 fi
 
-# 4. Bring the container up (creates + starts if missing, starts if
+# 4. Ensure ./home/Main exists and is owned by you, not root. Compose
+#    bind-mounts ./Everything onto /home/dev/Main/Everything; if the
+#    intermediate ./home/Main didn't already exist (e.g. a devbox set up
+#    before Main/Everything was nested under a `Main` dir, so seeding in
+#    step 2 never ran again to pick it up), Docker auto-creates missing
+#    bind-mount path components itself — the daemon runs as root, so the
+#    directory ends up root:root instead of owned by the `dev` user.
+sudo mkdir -p ./home/Main
+sudo chown "$(id -u):$(id -g)" ./home/Main
+
+# 5. Bring the container up (creates + starts if missing, starts if
 #    stopped, no-op if already running) and attach an interactive shell.
 #    Re-running this script while the container is already up just
 #    reattaches — no duplicate containers, no error.
