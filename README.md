@@ -30,7 +30,7 @@ cd DevBox
 
 That single script:
 
-1. Builds the image (`my-dev-box:v2`), passing your host UID/GID as build
+1. Builds the image (`my-dev-box-v2`), passing your host UID/GID as build
    args so the container's `dev` user matches you and files it creates land
    with your ownership on the host. Docker's layer cache makes this a fast
    no-op when the Dockerfile and build args haven't changed since the last

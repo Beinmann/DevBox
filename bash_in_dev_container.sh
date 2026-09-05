@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-IMAGE="my-dev-box:v2"
+IMAGE="my-dev-box-v2"
 
 # 1. Always build — Docker's layer cache makes this a fast no-op when the
 #    Dockerfile and build args haven't changed, and it prevents silently

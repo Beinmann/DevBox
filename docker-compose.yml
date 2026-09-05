@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: my-dev-box:v2
+    image: my-dev-box-v2
     # Compose's default pull_policy ("missing") still tries a registry pull
     # first even when a `build` section is present, only falling back to
     # building on failure. "never" skips that pull attempt entirely and
