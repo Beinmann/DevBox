@@ -8,11 +8,12 @@ IMAGE="my-dev-box-v2"
 # 1. Export the host UID/GID for docker-compose.yml's build.args to pick
 #    up, in case Compose actually needs to build below (image missing, e.g.
 #    first run or after ./rebuild_image_after_change.sh). We deliberately do
-#    NOT force a `docker compose build` here: `pull_policy: never` already
-#    makes `up -d` build once when the image is missing and just reuse the
-#    cached local image otherwise — forcing a build on every start defeats
-#    that and was a mistake (see git history). Rebuilding after a Dockerfile
-#    change is ./rebuild_image_after_change.sh's job, not this script's.
+#    NOT force a `docker compose build` here: `--pull never` (passed below on
+#    every compose invocation) already makes `up -d` build once when the
+#    image is missing and just reuse the cached local image otherwise —
+#    forcing a build on every start defeats that and was a mistake (see git
+#    history). Rebuilding after a Dockerfile change is
+#    ./rebuild_image_after_change.sh's job, not this script's.
 export USER_UID="$(id -u)"
 export USER_GID="$(id -g)"
 
@@ -25,6 +26,16 @@ export USER_GID="$(id -g)"
 if [ ! -d ./home ]; then
   echo "==> ./home not found, seeding it from the image's built-in /home/dev..."
   mkdir -p ./home
+  # `docker create` below is a plain Docker CLI call, not `docker compose`,
+  # so it has no notion of `--pull never` and would otherwise try (and fail)
+  # to pull "$IMAGE" from a registry on a fresh clone with no local image
+  # yet. Build it through Compose first — `docker compose build` never
+  # touches a registry for the target image, only (as normal) for base
+  # images named in the Dockerfile's FROM.
+  if ! sudo docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "==> Image not found locally, building it..."
+    sudo env DEV_BOX_WRAPPER=1 docker compose build
+  fi
   echo "==> Starting temporary container to copy from..."
   tmp_container=$(sudo docker create "$IMAGE")
   sudo docker cp "$tmp_container:/home/dev/." ./home
@@ -64,5 +75,5 @@ sudo chown "$(id -u):$(id -g)" ./home/Main
 #    stopped, no-op if already running) and attach an interactive shell.
 #    Re-running this script while the container is already up just
 #    reattaches — no duplicate containers, no error.
-sudo env DEV_BOX_WRAPPER=1 docker compose up -d
+sudo env DEV_BOX_WRAPPER=1 docker compose up --pull never -d
 sudo env DEV_BOX_WRAPPER=1 docker compose exec my-dev-container bash

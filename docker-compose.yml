@@ -26,10 +26,10 @@ services:
     image: my-dev-box-v2
     # Compose's default pull_policy ("missing") still tries a registry pull
     # first even when a `build` section is present, only falling back to
-    # building on failure. "never" skips that pull attempt entirely and
-    # goes straight to build (only if the image is missing) or reusing the
-    # cached local image.
-    pull_policy: never
+    # building on failure. bash_in_dev_container.sh passes `--pull never` on
+    # `docker compose up` to skip that pull attempt entirely and go straight
+    # to build (only if the image is missing) or reuse the cached local
+    # image. (`docker compose build` never attempts that pull regardless.)
     # Container runs as the unprivileged `dev` user (see Dockerfile), not root.
     user: dev
     working_dir: /home/dev/Main/Everything
