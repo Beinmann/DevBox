@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Run this on the HOST (not inside the container). Waits a second (so you
 # can switch to the window you want), takes a screenshot via your own
-# `myScreenshot` command, and drops it into ./home, which every devbox clone
-# bind-mounts to /home/dev. Inside the container, read it from ~/ai-drop/.
+# `myScreenshot` command, and drops it into ./home/Main, which every devbox
+# clone bind-mounts to /home/dev/Main (./home:/home/dev). Inside the
+# container, read it from ~/Main/ai-drop/.
 #
 # `myScreenshot <output-path>` must already be defined on your host (alias,
 # function, or script on PATH) — that's on you to set up, this script just
@@ -18,7 +19,7 @@ if ! command -v myScreenshot >/dev/null 2>&1; then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-drop_dir="$script_dir/home/ai-drop"
+drop_dir="$script_dir/home/Main/ai-drop"
 mkdir -p "$drop_dir"
 
 sleep 1
@@ -27,4 +28,4 @@ out="$drop_dir/shot-$(date +%Y%m%d-%H%M%S).png"
 
 myScreenshot "$out"
 
-echo "Saved $out (readable inside container at ~/ai-drop/$(basename "$out"))"
+echo "Saved $out (readable inside container at ~/Main/ai-drop/$(basename "$out"))"
