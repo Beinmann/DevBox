@@ -19,6 +19,12 @@ if ! command -v myScreenshot >/dev/null 2>&1; then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ ! -d "$script_dir/home" ]; then
+    echo "$script_dir/home does not exist yet — start the container at least once first (./bash_in_dev_container.sh)." >&2
+    exit 1
+fi
+
 drop_dir="$script_dir/home/Main/ai-drop"
 mkdir -p "$drop_dir"
 
