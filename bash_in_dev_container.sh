@@ -72,8 +72,11 @@ sudo mkdir -p ./home/Main
 sudo chown "$(id -u):$(id -g)" ./home/Main
 
 # 5. Bring the container up (creates + starts if missing, starts if
-#    stopped, no-op if already running) and attach an interactive shell.
-#    Re-running this script while the container is already up just
-#    reattaches — no duplicate containers, no error.
+#    stopped, no-op if already running) and attach to a tmux session inside
+#    it. `tmux new-session -A -s main` attaches to the "main" session if it
+#    already exists (so background work, split panes, etc. survive across
+#    reattaches) or creates it if this is the first attach. Re-running this
+#    script while the container is already up just reattaches — no
+#    duplicate containers, no error.
 sudo env DEV_BOX_WRAPPER=1 docker compose up --pull never -d
-sudo env DEV_BOX_WRAPPER=1 docker compose exec my-dev-container bash
+sudo env DEV_BOX_WRAPPER=1 docker compose exec my-dev-container tmux new-session -A -s main
