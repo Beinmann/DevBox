@@ -28,7 +28,7 @@ fi
 drop_dir="$script_dir/home/Main/ai-drop"
 mkdir -p "$drop_dir"
 
-sleep 1
+sleep 0.5
 
 out="$drop_dir/shot-$(date +%Y%m%d-%H%M%S).png"
 
