@@ -29,7 +29,46 @@ if [ -f "$DEVBOX_ENV_FILE" ]; then
     echo "==> Warning: $DEVBOX_ENV_FILE has mode $perms; run: chmod 600 $DEVBOX_ENV_FILE" >&2
   fi
 else
-  DEVBOX_ENV_FILE=/dev/null
+  # No token file yet: offer to create one, unless the user opted out
+  # earlier (marker file) or there's no terminal to ask on.
+  NO_PROMPT_MARKER="$(dirname "$DEVBOX_ENV_FILE")/no-token-prompt"
+  if [ -t 0 ] && [ ! -e "$NO_PROMPT_MARKER" ]; then
+    echo "==> No token file found at $DEVBOX_ENV_FILE."
+    echo "    Without it, Claude Code asks you to log in in every devbox."
+    echo "    (Create a token on the host with: claude setup-token)"
+    echo "    1) Enter a token now (saved to that file, mode 600)"
+    echo "    2) Skip for this run"
+    echo "    3) Continue and don't ask again"
+    echo "    4) Cancel"
+    while :; do
+      read -rp "    Choice [1-4]: " choice
+      case "$choice" in
+        1)
+          read -rsp "    Token (input hidden): " token; echo
+          if [ -z "$token" ] || [[ "$token" =~ [[:space:]] ]]; then
+            echo "    Empty or contains whitespace, try again." >&2
+            continue
+          fi
+          mkdir -p "$(dirname "$DEVBOX_ENV_FILE")"
+          chmod 700 "$(dirname "$DEVBOX_ENV_FILE")"
+          (umask 077; printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\n' "$token" > "$DEVBOX_ENV_FILE")
+          unset token
+          echo "==> Saved to $DEVBOX_ENV_FILE."
+          echo "    Only applies when the container is (re)created; if it's already running,"
+          echo "    run ./stop_dev_container.sh and start again."
+          break ;;
+        2) break ;;
+        3)
+          mkdir -p "$(dirname "$NO_PROMPT_MARKER")"
+          touch "$NO_PROMPT_MARKER"
+          echo "==> Won't ask again (delete $NO_PROMPT_MARKER to re-enable)."
+          break ;;
+        4) echo "==> Cancelled."; exit 0 ;;
+        *) echo "    Please enter 1, 2, 3 or 4." >&2 ;;
+      esac
+    done
+  fi
+  [ -f "$DEVBOX_ENV_FILE" ] || DEVBOX_ENV_FILE=/dev/null
 fi
 export DEVBOX_ENV_FILE
 
