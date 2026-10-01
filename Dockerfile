@@ -96,20 +96,22 @@ RUN curl -fsSL https://github.com/neovim/neovim/releases/latest/download/nvim-li
 # non-fatal, so `npm install` succeeded while shipping a broken stub). The
 # native installers fetch the platform binary directly, sidestepping that.
 #
-# Installed under $HOME=/opt/... (not root's actual home) and symlinked into
-# /usr/local/bin, so the `dev` user isn't blocked from following the symlink
-# by root's home directory being 0700.
-# NOTE: `HOME=... curl ... | bash` only sets HOME for `curl`, not for the
-# `bash` that actually runs the installer (env assignments apply to just the
-# first command in a pipeline) — so the install silently lands in the real
-# HOME instead. Wrap the whole pipeline in `bash -c '...'` so HOME applies to
-# both halves.
-RUN HOME=/opt/claude-install bash -c 'curl -fsSL https://claude.ai/install.sh | bash -s latest' \
-    && chmod -R a+rX /opt/claude-install \
-    && ln -s /opt/claude-install/.local/bin/claude /usr/local/bin/claude
-RUN HOME=/opt/opencode-install bash -c 'curl -fsSL https://opencode.ai/install | bash' \
-    && chmod -R a+rX /opt/opencode-install \
-    && ln -s /opt/opencode-install/.opencode/bin/opencode /usr/local/bin/opencode
+# Installed as the `dev` user straight into /home/dev (~/.local, ~/.opencode),
+# so there is exactly one copy per devbox: bash_in_dev_container.sh seeds
+# ./home from this directory on first run, and from then on that copy lives
+# in the bind mount, owned by `dev`, where Claude's auto-updater can replace
+# it. (Do not install system-wide under /opt + /usr/local/bin: that copy is
+# root-owned, can't self-update, and would be shadowed by ~/.local/bin anyway.)
+# ---------------------------------------------------------------------------
+ENV HOME=/home/dev \
+    SHELL=/bin/bash \
+    EDITOR=vim \
+    PATH=/home/dev/.local/bin:/home/dev/.opencode/bin:$PATH
+
+USER dev
+
+RUN curl -fsSL https://claude.ai/install.sh | bash -s latest
+RUN curl -fsSL https://opencode.ai/install | bash
 
 RUN claude --version && opencode --version
 
@@ -119,11 +121,6 @@ RUN claude --version && opencode --version
 # Container runs as the unprivileged `dev` user, whose home is bind-mounted
 # from the host so all user state — dotfiles, shell history, ~/.claude —
 # persists.
-ENV HOME=/home/dev \
-    SHELL=/bin/bash \
-    EDITOR=vim
-
-USER dev
 
 # Projects live here; the host ./Everything is bind-mounted onto this path.
 WORKDIR /home/dev/Main/Everything
