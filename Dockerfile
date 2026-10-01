@@ -115,6 +115,13 @@ RUN curl -fsSL https://opencode.ai/install | bash
 
 RUN claude --version && opencode --version
 
+# dotfilesv3 (+ submodules, all public HTTPS), cloned as `dev` so it lands in
+# the /home/dev that bash_in_dev_container.sh seeds into ./home. Only cloned,
+# not stowed. Target dir is capital-V `dotfilesV3`.
+RUN mkdir -p /home/dev/Main \
+    && git clone --recurse-submodules https://github.com/Beinmann/dotfilesv3 \
+        /home/dev/Main/dotfilesV3
+
 # ---------------------------------------------------------------------------
 # Runtime config
 # ---------------------------------------------------------------------------
