@@ -50,5 +50,11 @@ services:
       - ./home:/home/dev
       # Project workspace, mounted where WORKDIR expects it.
       - ./Everything:/home/dev/Main/Everything
+    # Optional secrets (e.g. CLAUDE_CODE_OAUTH_TOKEN=...) as KEY=VALUE lines.
+    # bash_in_dev_container.sh points DEVBOX_ENV_FILE at
+    # ~/.config/devbox/env on the host; falls back to an empty file if unset.
+    # Read by Compose itself (as root, via sudo) so the token never appears
+    # in process args or the sudo-stripped environment.
+    env_file: ${DEVBOX_ENV_FILE:-/dev/null}
     environment:
       - TERM=xterm-256color

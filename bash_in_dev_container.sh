@@ -17,6 +17,22 @@ IMAGE="my-dev-box-v2"
 export USER_UID="$(id -u)"
 export USER_GID="$(id -g)"
 
+# 1b. Optional host-side secrets file (KEY=VALUE lines, e.g.
+#     CLAUDE_CODE_OAUTH_TOKEN=... from `claude setup-token`). Kept outside
+#     the repo and ./home, passed to the container via compose's env_file.
+#     Only takes effect when the container is (re)created, so run
+#     ./stop_dev_container.sh first after changing it.
+DEVBOX_ENV_FILE="${DEVBOX_ENV_FILE:-$HOME/.config/devbox/env}"
+if [ -f "$DEVBOX_ENV_FILE" ]; then
+  perms=$(stat -c %a "$DEVBOX_ENV_FILE")
+  if [ "$perms" != "600" ] && [ "$perms" != "400" ]; then
+    echo "==> Warning: $DEVBOX_ENV_FILE has mode $perms; run: chmod 600 $DEVBOX_ENV_FILE" >&2
+  fi
+else
+  DEVBOX_ENV_FILE=/dev/null
+fi
+export DEVBOX_ENV_FILE
+
 # 2. Seed ./home from the image's baked-in /home/dev on first run only,
 #    before the bind mount in docker-compose.yml would otherwise shadow it.
 #    Also stamp a random 3-char instance ID (17576 combinations — not a real
@@ -78,5 +94,5 @@ sudo chown "$(id -u):$(id -g)" ./home/Main
 #    reattaches) or creates it if this is the first attach. Re-running this
 #    script while the container is already up just reattaches — no
 #    duplicate containers, no error.
-sudo env DEV_BOX_WRAPPER=1 docker compose up --pull never -d
-sudo env DEV_BOX_WRAPPER=1 docker compose exec my-dev-container tmux new-session -A -s main
+sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" docker compose up --pull never -d
+sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" docker compose exec my-dev-container tmux new-session -A -s main
