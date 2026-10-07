@@ -30,6 +30,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         htop vim nano rsync man-db locales sudo \
         # required by dotfilesv3 (base/ai/nvim/vim/scripts modules)
         stow ranger bc \
+        # lets devbox-proxy reach servers bound to 127.0.0.1 (ticket 006)
+        socat \
     && rm -rf /var/lib/apt/lists/*
 
 # fd is installed as `fdfind` on Debian/Ubuntu; expose the conventional name.
