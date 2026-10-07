@@ -58,3 +58,13 @@ services:
     env_file: ${DEVBOX_ENV_FILE:-/dev/null}
     environment:
       - TERM=xterm-256color
+    # Shared across all devboxes (and the sister devbox-proxy) so the proxy
+    # can reach every box by container name. Created by the wrapper script
+    # since Compose won't create an external network.
+    networks:
+      - devbox-net
+
+networks:
+  devbox-net:
+    external: true
+    name: devbox-net

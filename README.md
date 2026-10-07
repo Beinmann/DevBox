@@ -125,10 +125,26 @@ running on the old image until you stop and start it again:
 `docker compose up -d` recreates the container from the updated image since
 the image changed.
 
+## Reaching servers inside the container
+
+No ports are published. To open a dev server running in a box from your host
+browser, use the sister repo `devbox-proxy` (`../devbox-proxy`): one host
+port, a web UI listing your boxes, and any container port at
+`http://<port>.<container>.localhost:<proxy port>/`.
+
+- All boxes join one shared Docker network, `devbox-net` (created by
+  `bash_in_dev_container.sh` if missing), which is how the proxy reaches
+  them by container name. Side effect: boxes can also reach *each other*
+  on that network, so they're not network-isolated from one another.
+- **Dev servers must listen on `0.0.0.0`**, not just `localhost`/`127.0.0.1`,
+  or the proxy gets connection refused. Many tools default to localhost-only
+  (Vite: `--host 0.0.0.0`; Next: `-H 0.0.0.0`; Flask: `--host 0.0.0.0`;
+  `python -m http.server` already binds all interfaces).
+
 ## Notes
 
-- No network ports are exposed and no host directories other than `./home`
-  and `./Everything` are mounted — nothing else on the host is reachable
-  from inside the container.
+- No ports are published and no host directories other than `./home` and
+  `./Everything` are mounted — nothing else on the host is reachable from
+  inside the container.
 - The image never pulls from a registry under the name `my-dev-box` — Compose
   is configured (`pull_policy: never`) to only build locally.

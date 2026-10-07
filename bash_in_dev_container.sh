@@ -133,5 +133,8 @@ sudo chown "$(id -u):$(id -g)" ./home/Main
 #    reattaches) or creates it if this is the first attach. Re-running this
 #    script while the container is already up just reattaches — no
 #    duplicate containers, no error.
+# The compose file attaches the box to the shared, external `devbox-net`
+# network (so devbox-proxy can reach it); Compose won't create it, we do.
+sudo docker network inspect devbox-net >/dev/null 2>&1 || sudo docker network create devbox-net >/dev/null
 sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" docker compose up --pull never -d
 sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" docker compose exec my-dev-container tmux new-session -A -s main
