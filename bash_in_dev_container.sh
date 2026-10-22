@@ -3,13 +3,6 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-RENAME=0
-case "${1:-}" in
-  "") ;;
-  --rename) RENAME=1 ;;
-  *) echo "Usage: $0 [--rename]" >&2; exit 2 ;;
-esac
-
 IMAGE="my-dev-box-v2"
 
 # 1. Export the host UID/GID for docker-compose.yml's build.args to pick
@@ -132,48 +125,6 @@ fi
 #    directory ends up root:root instead of owned by the `dev` user.
 sudo mkdir -p ./home/Main
 sudo chown "$(id -u):$(id -g)" ./home/Main
-
-# 4b. Name this devbox, record it in the host-side registry, and (if i3 is
-#     reachable) move this terminal to workspace "dev:<name>". Host side
-#     only, on purpose: containers must not be able to reach i3. Skipped
-#     without a terminal to ask on, so scripted runs behave as before.
-#     Name (+ optional title) live in ./.devbox-name; --rename asks again.
-have_i3() { command -v i3-msg >/dev/null 2>&1 && i3-msg -t get_version >/dev/null 2>&1; }
-if [ -t 0 ] && [ -t 1 ]; then
-  NAME_FILE=./.devbox-name
-  REGISTRY="${XDG_STATE_HOME:-$HOME/.local/state}/devbox/registry.tsv"
-  name=""; title=""
-  if [ "$RENAME" = 0 ] && [ -f "$NAME_FILE" ]; then
-    name=$(sed -n 1p "$NAME_FILE"); title=$(sed -n 2p "$NAME_FILE")
-  fi
-  if ! [[ "$name" =~ ^[A-Za-z0-9_-]{1,16}$ ]]; then
-    while :; do
-      read -rp "==> Short name for this devbox (i3 workspace dev:<name>): " name
-      [[ "$name" =~ ^[A-Za-z0-9_-]{1,16}$ ]] && break
-      echo "    Use 1-16 letters, digits, - or _." >&2
-    done
-    read -rp "    Longer title (optional): " title
-    printf '%s\n%s\n' "$name" "$title" > "$NAME_FILE"
-  fi
-  title="${title//$'\t'/ }"; : "${title:=$name}"
-  ws="dev:$name"
-  # Refuse if that workspace is open for a different devbox (registry says
-  # who owns the name); a rerun for the same dir is fine.
-  if have_i3 && i3-msg -t get_workspaces | grep -qF "\"name\":\"$ws\""; then
-    owner=$(awk -F'\t' -v n="$name" '$1 == n { print $2 }' "$REGISTRY" 2>/dev/null || true)
-    if [ "$owner" != "$PWD" ]; then
-      echo "==> Workspace $ws is already open for another devbox (${owner:-unknown}). Use --rename." >&2
-      exit 1
-    fi
-  fi
-  # Newest entry wins: drop older lines with this name or this path.
-  mkdir -p "$(dirname "$REGISTRY")"
-  tmp=$(mktemp "$REGISTRY.XXXXXX")
-  { awk -F'\t' -v n="$name" -v p="$PWD" '$1 != n && $2 != p' "$REGISTRY" 2>/dev/null || true
-    printf '%s\t%s\t%s\t%s\n' "$name" "$PWD" "$title" "$(date -Is)"; } > "$tmp"
-  mv "$tmp" "$REGISTRY"
-  have_i3 && i3-msg "move container to workspace \"$ws\"; workspace \"$ws\"" >/dev/null
-fi
 
 # 5. Bring the container up (creates + starts if missing, starts if
 #    stopped, no-op if already running) and attach to a tmux session inside

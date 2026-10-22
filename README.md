@@ -141,23 +141,6 @@ port, a web UI listing your boxes, and any container port at
   (Vite: `--host 0.0.0.0`; Next: `-H 0.0.0.0`; Flask: `--host 0.0.0.0`;
   `python -m http.server` already binds all interfaces).
 
-## Naming boxes and i3 workspaces
-
-When run in a terminal, `bash_in_dev_container.sh` asks once for a short name
-(1-16 chars of `A-Za-z0-9_-`) and an optional title, saved in `./.devbox-name`
-(gitignored; line 1 name, line 2 title). `./bash_in_dev_container.sh --rename`
-asks again. Without a terminal it skips all of this.
-
-Each start records the box in a host-side registry,
-`${XDG_STATE_HOME:-~/.local/state}/devbox/registry.tsv`: tab-separated
-`name`, absolute path, title, ISO timestamp. A newer entry replaces older ones
-with the same name or path. Nothing in it is visible to the container.
-
-If `i3-msg -t get_version` succeeds, the current terminal is also moved to
-and focuses workspace `dev:<name>`. If that workspace is already open for a
-different box the script refuses to start (use `--rename`). Without i3 this
-is a silent no-op.
-
 ## Notes
 
 - No ports are published and no host directories other than `./home` and
