@@ -183,9 +183,17 @@ One-time tailnet setup (admin console):
 
 How it works: `docker-compose.tailscale.yml` (added with `-f` only when the
 secret file exists) runs a `tailscale/tailscale` sidecar in userspace mode
-(no `NET_ADMIN`, no TUN device; the start script pulls the image if it's
+(no TUN device; the start script pulls the image if it's
 missing, since the box itself is started with `--pull never`) and makes the box share its network
-namespace. Boxes are ephemeral nodes and vanish from the tailnet when they
+namespace. The sidecar (not the box) has
+`NET_ADMIN` only to reject traffic from the box to `100.64.0.0/10`: without that
+rule a box could reach your tailnet devices through the host's own Tailscale
+(box, Docker bridge, host, `tailscale0`, arriving as the host), bypassing the
+policy above. This also means boxes *without* the sidecar can do that whenever
+the host runs Tailscale; to stop it for every container, drop forwarded
+traffic to that range on the host, e.g.
+`sudo iptables -I DOCKER-USER -d 100.64.0.0/10 -j DROP` (not persistent, and
+it affects all Docker containers). Boxes are ephemeral nodes and vanish from the tailnet when they
 stop. The node key lives in `./tailscale-state/` (gitignored, sidecar-only
 mount), so `./stop_dev_container.sh` leaves no Docker volumes. To update the
 sidecar, change the pinned tag in `docker-compose.tailscale.yml` (pick a
