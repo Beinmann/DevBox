@@ -141,6 +141,50 @@ port, a web UI listing your boxes, and any container port at
   (Vite: `--host 0.0.0.0`; Next: `-H 0.0.0.0`; Flask: `--host 0.0.0.0`;
   `python -m http.server` already binds all interfaces).
 
+## Reaching servers over Tailscale
+
+Optional. With it, each devbox joins your tailnet as its own node, named
+`devbox-<dir name>-<3 random chars>` (the suffix is generated once and kept in
+`./tailscale-state/`), and every port a server in the box listens on —
+including `127.0.0.1`-only ones — is reachable as `http://<node name>:<port>`
+from your other tailnet devices and from the host (which needs the Tailscale
+client). Plain HTTP only; the traffic is already WireGuard-encrypted.
+
+On the first interactive start the script asks once whether to set it up; the
+answer is kept in `~/.config/devbox/` (outside the repo and `./home`), so it
+is not asked again for other boxes or clones. Declined or unset, the box
+starts as without it: no sidecar, nothing in the repo.
+
+One-time tailnet setup (admin console):
+
+1. Define `tag:devbox` (owner `autogroup:admin`) and replace the default
+   allow-all policy, so that your own devices may reach `tag:devbox` but
+   nothing lets a devbox start a connection:
+   ```json
+   {
+     "tagOwners": { "tag:devbox": ["autogroup:admin"] },
+     "grants": [
+       { "src": ["autogroup:member"], "dst": ["autogroup:member", "tag:devbox"], "ip": ["*"] }
+     ]
+   }
+   ```
+2. Create an OAuth client with only the `auth_keys` (write) scope and the tag
+   `tag:devbox`. Give its secret to the script when asked, or write
+   `TS_AUTHKEY=<secret>?ephemeral=true&preauthorized=true` to
+   `~/.config/devbox/tailscale.env` (mode 600). Never put it in the repo or
+   `./home`; the box can't read it (only the sidecar gets it).
+
+How it works: `docker-compose.tailscale.yml` (added with `-f` only when the
+secret file exists) runs a `tailscale/tailscale` sidecar in userspace mode
+(no `NET_ADMIN`, no TUN device) and makes the box share its network
+namespace. Boxes are ephemeral nodes and vanish from the tailnet when they
+stop. The node key lives in `./tailscale-state/` (gitignored, sidecar-only
+mount), so `./stop_dev_container.sh` leaves no Docker volumes. Needs Docker
+Compose 2.24.4+ (`!reset`). While Tailscale is on, the box is not on
+`devbox-net`, so `devbox-proxy` cannot reach it. Dev servers that check the
+Host header (Vite `allowedHosts`, Django `ALLOWED_HOSTS`) must allow the node
+name.
+
 ## Notes
 
 - No ports are published and no host directories other than `./home` and

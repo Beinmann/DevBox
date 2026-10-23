@@ -72,6 +72,73 @@ else
 fi
 export DEVBOX_ENV_FILE
 
+# 1c. Optional Tailscale sidecar (see README, "Reaching servers over
+#     Tailscale"). The OAuth client secret lives in a host-global file
+#     outside the repo and ./home, so it is asked for once for all boxes and
+#     clones; a marker file records "no, don't ask again". Without a file the
+#     box starts exactly as before. Only takes effect when the container is
+#     (re)created.
+TS_ENV_FILE="${TAILSCALE_ENV_FILE:-$HOME/.config/devbox/tailscale.env}"
+TS_NO_PROMPT_MARKER="$(dirname "$TS_ENV_FILE")/no-tailscale-prompt"
+if [ ! -f "$TS_ENV_FILE" ] && [ -t 0 ] && [ ! -e "$TS_NO_PROMPT_MARKER" ]; then
+  echo "==> Tailscale is not set up (no $TS_ENV_FILE)."
+  echo "    With it, each devbox joins your tailnet as devbox-<dir>-<xyz> and its"
+  echo "    ports (even localhost-only ones) are reachable from your other devices."
+  echo "    Needs a one-time tailnet setup first, see README."
+  echo "    1) Enter the OAuth client secret now (saved to that file, mode 600)"
+  echo "    2) Skip for this run"
+  echo "    3) Continue and don't ask again"
+  echo "    4) Cancel"
+  while :; do
+    read -rp "    Choice [1-4]: " choice
+    case "$choice" in
+      1)
+        read -rsp "    OAuth client secret (input hidden): " secret; echo
+        if [ -z "$secret" ] || [[ "$secret" =~ [[:space:]?] ]]; then
+          echo "    Empty or contains whitespace/'?', try again (paste the bare secret)." >&2
+          continue
+        fi
+        mkdir -p "$(dirname "$TS_ENV_FILE")"
+        chmod 700 "$(dirname "$TS_ENV_FILE")"
+        (umask 077; printf 'TS_AUTHKEY=%s?ephemeral=true&preauthorized=true\n' "$secret" > "$TS_ENV_FILE")
+        unset secret
+        echo "==> Saved to $TS_ENV_FILE."
+        break ;;
+      2) break ;;
+      3)
+        mkdir -p "$(dirname "$TS_NO_PROMPT_MARKER")"
+        touch "$TS_NO_PROMPT_MARKER"
+        echo "==> Won't ask again (delete $TS_NO_PROMPT_MARKER to re-enable)."
+        break ;;
+      4) echo "==> Cancelled."; exit 0 ;;
+      *) echo "    Please enter 1, 2, 3 or 4." >&2 ;;
+    esac
+  done
+fi
+COMPOSE_FILES=(-f docker-compose.yml)
+TS_HOSTNAME=""
+if [ -f "$TS_ENV_FILE" ]; then
+  perms=$(stat -c %a "$TS_ENV_FILE")
+  if [ "$perms" != "600" ] && [ "$perms" != "400" ]; then
+    echo "==> Warning: $TS_ENV_FILE has mode $perms; run: chmod 600 $TS_ENV_FILE" >&2
+  fi
+  COMPOSE_FILES+=(-f docker-compose.tailscale.yml)
+  # Hostname: devbox-<dir name>-<3 random chars>. The suffix is generated
+  # once and kept in the (sidecar-only) state dir, so it is unique across
+  # clones but stable across restarts (cert reuse, no node churn).
+  mkdir -p -m 700 ./tailscale-state
+  if [ ! -s ./tailscale-state/hostname-suffix ]; then
+    # pipefail scoped off, see the .devbox_id comment below.
+    (set +o pipefail; tr -dc 'a-z0-9' < /dev/urandom 2>/dev/null | head -c3) > ./tailscale-state/hostname-suffix
+  fi
+  ts_short=$(basename "$PWD" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n-' '-' | cut -c1-40)
+  TS_HOSTNAME="devbox-${ts_short}-$(cat ./tailscale-state/hostname-suffix)"
+  echo "==> Tailscale enabled, node name: $TS_HOSTNAME"
+else
+  TS_ENV_FILE=/dev/null
+fi
+export TS_ENV_FILE TS_HOSTNAME
+
 # 2. Seed ./home from the image's baked-in /home/dev on first run only,
 #    before the bind mount in docker-compose.yml would otherwise shadow it.
 #    Also stamp a random 3-char instance ID (17576 combinations — not a real
@@ -136,5 +203,12 @@ sudo chown "$(id -u):$(id -g)" ./home/Main
 # The compose file attaches the box to the shared, external `devbox-net`
 # network (so devbox-proxy can reach it); Compose won't create it, we do.
 sudo docker network inspect devbox-net >/dev/null 2>&1 || sudo docker network create devbox-net >/dev/null
-sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" docker compose up --pull never -d
-sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" docker compose exec my-dev-container tmux new-session -A -s main
+compose() {
+  sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" \
+    TS_ENV_FILE="$TS_ENV_FILE" TS_HOSTNAME="$TS_HOSTNAME" \
+    docker compose "${COMPOSE_FILES[@]}" "$@"
+}
+# --remove-orphans: drops the sidecar if Tailscale was turned off since the
+# last start.
+compose up --pull never -d --remove-orphans
+compose exec my-dev-container tmux new-session -A -s main

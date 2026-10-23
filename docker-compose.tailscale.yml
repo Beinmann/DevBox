@@ -1,0 +1,37 @@
+# Optional Tailscale sidecar. bash_in_dev_container.sh / stop_dev_container.sh
+# add this file with `-f` (never edit docker-compose.yml for it); when
+# Tailscale is not set up on the host, the sidecar is not started. Like the
+# base file it must not be used with `docker compose` directly.
+#
+# The box shares the sidecar's network namespace, so loopback-only servers in
+# the box are the sidecar's localhost too, and the node shows up on the
+# tailnet as TS_HOSTNAME. Userspace networking: no NET_ADMIN, no /dev/net/tun,
+# and the box has no route *into* the tailnet. Compose recreates the box
+# whenever the sidecar is recreated (a new sidecar means a new netns).
+x-require-wrapper: "${DEV_BOX_WRAPPER:?Use ./bash_in_dev_container.sh instead of calling docker compose directly}"
+
+services:
+  tailscale:
+    image: tailscale/tailscale:stable
+    restart: "no"
+    # Host-side file with TS_AUTHKEY=<OAuth client secret>?ephemeral=true&preauthorized=true
+    # (outside the repo and ./home). Read by Compose as root and handed only
+    # to this container; the box can't see it. `stop_dev_container.sh` runs
+    # without it, hence the /dev/null fallback.
+    env_file: ${TS_ENV_FILE:-/dev/null}
+    environment:
+      - TS_HOSTNAME=${TS_HOSTNAME:-devbox}
+      - TS_USERSPACE=true
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_EXTRA_ARGS=--advertise-tags=tag:devbox
+    volumes:
+      # Node key and cached certs. A bind mount, not a named volume, so
+      # `compose down` leaves Docker clean. Mounted here only, never in the box.
+      - ./tailscale-state:/var/lib/tailscale
+
+  my-dev-container:
+    network_mode: service:tailscale
+    # Can't be combined with network_mode; reset the base file's list.
+    networks: !reset null
+    depends_on:
+      - tailscale
