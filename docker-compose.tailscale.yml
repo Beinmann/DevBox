@@ -6,13 +6,18 @@
 # The box shares the sidecar's network namespace, so loopback-only servers in
 # the box are the sidecar's localhost too, and the node shows up on the
 # tailnet as TS_HOSTNAME. Userspace networking: no NET_ADMIN, no /dev/net/tun,
-# and the box has no route *into* the tailnet. Compose recreates the box
-# whenever the sidecar is recreated (a new sidecar means a new netns).
+# and the box has no route *into* the tailnet. Compose recreates the box if
+# its config changed (e.g. Tailscale toggled); if only the sidecar is
+# recreated the box keeps a dead netns, so restart both with
+# ./stop_dev_container.sh.
 x-require-wrapper: "${DEV_BOX_WRAPPER:?Use ./bash_in_dev_container.sh instead of calling docker compose directly}"
 
 services:
   tailscale:
-    image: tailscale/tailscale:stable
+    # Pinned (>= 2 weeks old at pinning time) and the only place the image is
+    # named: the wrapper pulls it by service name when missing, since `up`
+    # runs with --pull never. To bump: edit this tag, then stop and start.
+    image: tailscale/tailscale:v1.102.5
     restart: "no"
     # Host-side file with TS_AUTHKEY=<OAuth client secret>?ephemeral=true&preauthorized=true
     # (outside the repo and ./home). Read by Compose as root and handed only

@@ -82,7 +82,7 @@ TS_ENV_FILE="${TAILSCALE_ENV_FILE:-$HOME/.config/devbox/tailscale.env}"
 TS_NO_PROMPT_MARKER="$(dirname "$TS_ENV_FILE")/no-tailscale-prompt"
 if [ ! -f "$TS_ENV_FILE" ] && [ -t 0 ] && [ ! -e "$TS_NO_PROMPT_MARKER" ]; then
   echo "==> Tailscale is not set up (no $TS_ENV_FILE)."
-  echo "    With it, each devbox joins your tailnet as devbox-<dir>-<xyz> and its"
+  echo "    With it, each devbox joins your tailnet as devbox-<name>-<xyz> and its"
   echo "    ports (even localhost-only ones) are reachable from your other devices."
   echo "    Needs a one-time tailnet setup first, see README."
   echo "    1) Enter the OAuth client secret now (saved to that file, mode 600)"
@@ -96,6 +96,10 @@ if [ ! -f "$TS_ENV_FILE" ] && [ -t 0 ] && [ ! -e "$TS_NO_PROMPT_MARKER" ]; then
         read -rsp "    OAuth client secret (input hidden): " secret; echo
         if [ -z "$secret" ] || [[ "$secret" =~ [[:space:]?] ]]; then
           echo "    Empty or contains whitespace/'?', try again (paste the bare secret)." >&2
+          continue
+        fi
+        if [[ "$secret" != tskey-client-* ]]; then
+          echo "    Not an OAuth client secret (should start with tskey-client-), try again." >&2
           continue
         fi
         mkdir -p "$(dirname "$TS_ENV_FILE")"
@@ -116,6 +120,7 @@ if [ ! -f "$TS_ENV_FILE" ] && [ -t 0 ] && [ ! -e "$TS_NO_PROMPT_MARKER" ]; then
   done
 fi
 COMPOSE_FILES=(-f docker-compose.yml)
+TS_ENABLED=""
 TS_HOSTNAME=""
 if [ -f "$TS_ENV_FILE" ]; then
   perms=$(stat -c %a "$TS_ENV_FILE")
@@ -123,16 +128,46 @@ if [ -f "$TS_ENV_FILE" ]; then
     echo "==> Warning: $TS_ENV_FILE has mode $perms; run: chmod 600 $TS_ENV_FILE" >&2
   fi
   COMPOSE_FILES+=(-f docker-compose.tailscale.yml)
-  # Hostname: devbox-<dir name>-<3 random chars>. The suffix is generated
+  TS_ENABLED=1
+  # Node name: devbox-<short name>-<3 random chars>. The suffix is generated
   # once and kept in the (sidecar-only) state dir, so it is unique across
-  # clones but stable across restarts (cert reuse, no node churn).
+  # clones but stable across restarts (cert reuse, no node churn). The short
+  # name is asked for once per devbox dir and kept in ./.devbox-tailscale-name
+  # (delete it to be asked again).
   mkdir -p -m 700 ./tailscale-state
   if [ ! -s ./tailscale-state/hostname-suffix ]; then
     # pipefail scoped off, see the .devbox_id comment below.
     (set +o pipefail; tr -dc 'a-z0-9' < /dev/urandom 2>/dev/null | head -c3) > ./tailscale-state/hostname-suffix
   fi
-  ts_short=$(basename "$PWD" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n-' '-' | cut -c1-40)
-  TS_HOSTNAME="devbox-${ts_short}-$(cat ./tailscale-state/hostname-suffix)"
+  ts_suffix=$(cat ./tailscale-state/hostname-suffix)
+  # lowercase a-z0-9-, runs of other chars become one hyphen, trimmed, max 40
+  ts_sanitize() {
+    printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | sed 's/^-//; s/-$//' \
+      | cut -c1-40 | sed 's/-$//'
+  }
+  ts_short=$(ts_sanitize "$(basename "$PWD")")
+  [ "$ts_short" != devbox ] || ts_short=$(ts_sanitize "$(basename "$(dirname "$PWD")")")
+  [ -n "$ts_short" ] || ts_short=box
+  ts_saved=$(ts_sanitize "$(cat ./.devbox-tailscale-name 2>/dev/null || true)")
+  if [ -n "$ts_saved" ]; then
+    ts_short=$ts_saved
+  elif [ -t 0 ]; then
+    while :; do
+      echo "==> Node name will be: devbox-${ts_short}-${ts_suffix}"
+      read -rp "    Enter to accept, or type another short name: " ts_input
+      [ -n "$ts_input" ] || break
+      ts_new=$(ts_sanitize "$ts_input")
+      if [ -z "$ts_new" ]; then
+        echo "    Use letters, digits and hyphens." >&2
+        continue
+      fi
+      ts_short=$ts_new
+    done
+    echo "$ts_short" > ./.devbox-tailscale-name
+    echo "    Saved in ./.devbox-tailscale-name (delete it to be asked again; renaming"
+    echo "    recreates the sidecar and the box)."
+  fi
+  TS_HOSTNAME="devbox-${ts_short}-${ts_suffix}"
   echo "==> Tailscale enabled, node name: $TS_HOSTNAME"
 else
   TS_ENV_FILE=/dev/null
@@ -208,6 +243,13 @@ compose() {
     TS_ENV_FILE="$TS_ENV_FILE" TS_HOSTNAME="$TS_HOSTNAME" \
     docker compose "${COMPOSE_FILES[@]}" "$@"
 }
+# The sidecar has no build section and `up` runs with --pull never, so fetch
+# its (pinned, see docker-compose.tailscale.yml) image first if it's missing.
+if [ -n "$TS_ENABLED" ] && ! compose pull --quiet --policy missing tailscale; then
+  echo "==> Could not pull the Tailscale sidecar image (see the 'image:' line in docker-compose.tailscale.yml)." >&2
+  echo "    Check your network and retry, or move $TS_ENV_FILE away to start without Tailscale." >&2
+  exit 1
+fi
 # --remove-orphans: drops the sidecar if Tailscale was turned off since the
 # last start.
 compose up --pull never -d --remove-orphans
