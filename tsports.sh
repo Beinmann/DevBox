@@ -16,6 +16,26 @@ ts() {
     exec -T tailscale "$@"
 }
 
+usage() {
+  echo "Usage: $0            add/change mappings (others stay as they are)" >&2
+  echo "       $0 --clear [HTTPS_PORT]   remove one mapping, or all of them" >&2
+  exit 1
+}
+
+clear_port=""
+mode=set
+case "${1:-}" in
+  "") ;;
+  --clear)
+    mode=clear
+    clear_port="${2:-}"
+    [ "$#" -le 2 ] || usage
+    if [ -n "$clear_port" ]; then
+      case "$clear_port" in 443|8443|10000) ;; *) echo "HTTPS port must be 443, 8443 or 10000: $clear_port" >&2; exit 1 ;; esac
+    fi ;;
+  *) usage ;;
+esac
+
 if ! ts tailscale status >/dev/null 2>&1; then
   echo "Tailscale sidecar not running for this dir. Start it with ./bash_in_dev_container.sh" >&2
   exit 1
@@ -34,17 +54,38 @@ echo "Listening in the box (candidate targets, best effort):"
 ts netstat -ltn 2>/dev/null \
   | awk 'NR>2 {n=split($4,a,":"); print a[n]}' | sort -un | sed 's/^/  /' || true
 echo
-echo "Allowed HTTPS ports: 443 8443 10000. Example: 443=4321 8443=8000"
-read -r -p "Mappings (empty = keep current, 'none' = clear): " -a wanted_in || true
-
-if [ "${#wanted_in[@]}" -eq 0 ]; then
-  read -r -a wanted_in <<< "$current"
-elif [ "${wanted_in[0]}" = "none" ]; then
-  wanted_in=()
+if [ "$mode" = clear ]; then
+  echo
+  if [ -n "$clear_port" ]; then
+    echo "This will stop serving HTTPS port $clear_port."
+  else
+    echo "This will stop serving ALL HTTPS mappings (was: ${current:-none})."
+  fi
+  read -r -p "Type 'clear' to confirm: " ok || true
+  [ "${ok:-}" = "clear" ] || { echo "Nothing changed."; exit 0; }
+  if [ -n "$clear_port" ]; then
+    ts tailscale serve --https="$clear_port" off
+  else
+    ts tailscale serve reset
+  fi
+  echo
+  ts tailscale serve status
+  exit 0
 fi
 
-declare -A seen
-wanted=()
+echo "Allowed HTTPS ports: 443 8443 10000. Example: 443=4321 8443=8000"
+echo "Mappings you enter replace the target of the same HTTPS port; all others stay."
+echo "To remove mappings use: $0 --clear [HTTPS_PORT]"
+read -r -p "Mappings (empty = change nothing): " -a wanted_in || true
+
+if [ "${#wanted_in[@]}" -eq 0 ]; then
+  echo "Nothing changed."; exit 0
+fi
+
+declare -A cur seen
+for m in $current; do cur[${m%=*}]=${m#*=}; done
+changes=()
+report=()
 for m in "${wanted_in[@]}"; do
   if ! [[ "$m" =~ ^([0-9]+)=([0-9]+)$ ]]; then
     echo "Invalid mapping: $m (use HTTPS=TARGET)" >&2; exit 1
@@ -54,16 +95,28 @@ for m in "${wanted_in[@]}"; do
   [ "$t" -ge 1 ] && [ "$t" -le 65535 ] || { echo "Invalid target port: $m" >&2; exit 1; }
   [ -z "${seen[$h]:-}" ] || { echo "HTTPS port $h given twice" >&2; exit 1; }
   seen[$h]=1
-  wanted+=("$h=$t")
+  if [ -z "${cur[$h]:-}" ]; then
+    report+=("  added    $h=$t"); changes+=("$h=$t")
+  elif [ "${cur[$h]}" != "$t" ]; then
+    report+=("  changed  $h=$t (was $h=${cur[$h]})"); changes+=("$h=$t")
+  else
+    report+=("  kept     $h=$t")
+  fi
+done
+for h in $(printf '%s\n' "${!cur[@]}" | sort -n); do
+  [ -n "${seen[$h]:-}" ] || report+=("  kept     $h=${cur[$h]}")
 done
 
 echo
-echo "Will serve: ${wanted[*]:-none}  (was: ${current:-none})"
+echo "Resulting state:"
+printf '%s\n' "${report[@]}"
+if [ "${#changes[@]}" -eq 0 ]; then
+  echo "Nothing to change."; exit 0
+fi
 read -r -p "Apply? [y/N] " ok || true
 [ "${ok:-n}" = "y" ] || [ "${ok:-n}" = "Y" ] || { echo "Nothing changed."; exit 0; }
 
-ts tailscale serve reset
-for m in "${wanted[@]}"; do
+for m in "${changes[@]}"; do
   ts tailscale serve --bg --https="${m%=*}" "http://127.0.0.1:${m#*=}"
 done
 echo
