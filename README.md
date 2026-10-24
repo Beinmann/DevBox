@@ -162,6 +162,11 @@ Renaming recreates the sidecar and the box (stop and start). The 3-char
 suffix is generated once and kept in `./tailscale-state/`. Without a TTY
 nothing is asked or saved and the default is used.
 
+HTTPS port mappings chosen with `./tsports.sh` are saved in `./https-ports`
+(gitignored, one `HTTPS=TARGET` per line) and re-applied by
+`./bash_in_dev_container.sh` on every start; invalid lines are reported and
+skipped. `./tsports.sh --apply` does the same by hand.
+
 One-time tailnet setup (admin console):
 
 1. Define `tag:devbox` (owner `autogroup:admin`) and replace the default

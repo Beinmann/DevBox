@@ -6,14 +6,59 @@
 # ./bash_in_dev_container.sh first) and "HTTPS Certificates" enabled once in
 # the Tailscale admin console (DNS page). `serve` only, never `funnel`:
 # nothing becomes public. Serve allows only HTTPS ports 443, 8443 and 10000.
+#
+# The applied mappings are saved to ./https-ports (one HTTPS=TARGET per line,
+# gitignored). `./tsports.sh --apply` re-applies that file without prompting;
+# bash_in_dev_container.sh calls it after the box is up. Invalid entries are
+# reported and skipped.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
+
+PORTS_FILE=./https-ports
 
 ts() {
   sudo env DEV_BOX_WRAPPER=1 docker compose \
     -f docker-compose.yml -f docker-compose.tailscale.yml \
     exec -T tailscale "$@"
+}
+
+if [ "${1:-}" = "--apply" ]; then
+  # Non-interactive restore of the saved mappings. Never fails the caller.
+  [ -s "$PORTS_FILE" ] || exit 0
+  for _ in $(seq 30); do
+    ts tailscale status >/dev/null 2>&1 && break
+    sleep 1
+  done
+  ts tailscale status >/dev/null 2>&1 || { echo "==> HTTPS ports not restored: Tailscale sidecar not ready." >&2; exit 0; }
+  declare -A seen
+  valid=()
+  while read -r m _; do
+    case "${m:-}" in ""|"#"*) continue ;; esac
+    if [[ "$m" =~ ^(443|8443|10000)=([0-9]+)$ ]] && [ "${BASH_REMATCH[2]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -le 65535 ] \
+       && [ -z "${seen[${BASH_REMATCH[1]}]:-}" ]; then
+      seen[${BASH_REMATCH[1]}]=1
+      valid+=("$m")
+    else
+      echo "==> Ignoring invalid entry in $PORTS_FILE: $m" >&2
+    fi
+  done < "$PORTS_FILE"
+  [ "${#valid[@]}" -gt 0 ] || exit 0
+  ts tailscale serve reset >/dev/null 2>&1 || true
+  for m in "${valid[@]}"; do
+    ts tailscale serve --bg --https="${m%=*}" "http://127.0.0.1:${m#*=}" >/dev/null 2>&1 \
+      || echo "==> Could not serve $m" >&2
+  done
+  echo "==> HTTPS ports restored: ${valid[*]}"
+  exit 0
+fi
+
+save_current() {
+  # Record the mappings now served (the merged result) in $PORTS_FILE.
+  ts tailscale serve status 2>/dev/null | awk '
+    /^https:\/\// { p = 443; if (match($1, /:[0-9]+$/)) p = substr($1, RSTART + 1) }
+    /^\|-- \/ proxy http:\/\/127\.0\.0\.1:[0-9]+/ { sub(/.*:/, "", $4); print p "=" $4 }
+  ' | sort -n > "$PORTS_FILE" || true
 }
 
 usage() {
@@ -68,6 +113,7 @@ if [ "$mode" = clear ]; then
   else
     ts tailscale serve reset
   fi
+  save_current
   echo
   ts tailscale serve status
   exit 0
@@ -119,5 +165,6 @@ read -r -p "Apply? [y/N] " ok || true
 for m in "${changes[@]}"; do
   ts tailscale serve --bg --https="${m%=*}" "http://127.0.0.1:${m#*=}"
 done
+save_current
 echo
 ts tailscale serve status

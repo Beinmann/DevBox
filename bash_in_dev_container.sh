@@ -253,4 +253,9 @@ fi
 # --remove-orphans: drops the sidecar if Tailscale was turned off since the
 # last start.
 compose up --pull never -d --remove-orphans
+# Restore the HTTPS port mappings saved by ./tsports.sh (no-op without a
+# saved ./https-ports; never fails the start).
+if [ -n "$TS_ENABLED" ] && [ -s ./https-ports ]; then
+  ./tsports.sh --apply || true
+fi
 compose exec my-dev-container tmux new-session -A -s main
