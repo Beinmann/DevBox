@@ -5,7 +5,8 @@
 # Needs the Tailscale sidecar to be running (start the box with
 # ./bash_in_dev_container.sh first) and "HTTPS Certificates" enabled once in
 # the Tailscale admin console (DNS page). `serve` only, never `funnel`:
-# nothing becomes public. Serve allows only HTTPS ports 443, 8443 and 10000.
+# nothing becomes public (only Funnel, never used here, is limited to the
+# HTTPS ports 443, 8443 and 10000).
 #
 # The applied mappings are saved to ./https-ports (one HTTPS=TARGET per line,
 # gitignored). `./tsports.sh --apply` re-applies that file without prompting;
@@ -35,7 +36,8 @@ if [ "${1:-}" = "--apply" ]; then
   valid=()
   while read -r m _; do
     case "${m:-}" in ""|"#"*) continue ;; esac
-    if [[ "$m" =~ ^(443|8443|10000)=([0-9]+)$ ]] && [ "${BASH_REMATCH[2]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -le 65535 ] \
+    if [[ "$m" =~ ^([0-9]+)=([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[1]}" -le 65535 ] \
+       && [ "${BASH_REMATCH[2]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -le 65535 ] \
        && [ -z "${seen[${BASH_REMATCH[1]}]:-}" ]; then
       seen[${BASH_REMATCH[1]}]=1
       valid+=("$m")
@@ -76,7 +78,7 @@ case "${1:-}" in
     clear_port="${2:-}"
     [ "$#" -le 2 ] || usage
     if [ -n "$clear_port" ]; then
-      case "$clear_port" in 443|8443|10000) ;; *) echo "HTTPS port must be 443, 8443 or 10000: $clear_port" >&2; exit 1 ;; esac
+      [[ "$clear_port" =~ ^[0-9]+$ ]] && [ "$clear_port" -ge 1 ] && [ "$clear_port" -le 65535 ] || { echo "Invalid HTTPS port: $clear_port" >&2; exit 1; }
     fi ;;
   *) usage ;;
 esac
@@ -119,7 +121,7 @@ if [ "$mode" = clear ]; then
   exit 0
 fi
 
-echo "Allowed HTTPS ports: 443 8443 10000. Example: 443=4321 8443=8000"
+echo "Example: 443=4321 8443=8000"
 echo "Mappings you enter replace the target of the same HTTPS port; all others stay."
 echo "To remove mappings use: $0 --clear [HTTPS_PORT]"
 read -r -p "Mappings (empty = change nothing): " -a wanted_in || true
@@ -137,7 +139,7 @@ for m in "${wanted_in[@]}"; do
     echo "Invalid mapping: $m (use HTTPS=TARGET)" >&2; exit 1
   fi
   h=${BASH_REMATCH[1]}; t=${BASH_REMATCH[2]}
-  case "$h" in 443|8443|10000) ;; *) echo "HTTPS port must be 443, 8443 or 10000: $m" >&2; exit 1 ;; esac
+  [ "$h" -ge 1 ] && [ "$h" -le 65535 ] || { echo "Invalid HTTPS port: $m" >&2; exit 1; }
   [ "$t" -ge 1 ] && [ "$t" -le 65535 ] || { echo "Invalid target port: $m" >&2; exit 1; }
   [ -z "${seen[$h]:-}" ] || { echo "HTTPS port $h given twice" >&2; exit 1; }
   seen[$h]=1
