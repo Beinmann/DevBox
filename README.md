@@ -166,6 +166,8 @@ HTTPS port mappings chosen with `./tsports.sh` are saved in `./https-ports`
 (gitignored, one `HTTPS=TARGET` per line) and re-applied by
 `./bash_in_dev_container.sh` on every start; invalid lines are reported and
 skipped. `./tsports.sh --apply` does the same by hand.
+`./tsports.sh` keeps prompting (showing the active mappings each round) until
+you enter an empty line, then asks to apply the collected changes.
 
 One-time tailnet setup (admin console):
 

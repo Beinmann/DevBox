@@ -123,49 +123,62 @@ fi
 
 echo "Example: 443=4321 8443=8000"
 echo "Mappings you enter replace the target of the same HTTPS port; all others stay."
+echo "Enter as many lines as you like; an empty line ends the session and applies."
 echo "To remove mappings use: $0 --clear [HTTPS_PORT]"
-read -r -p "Mappings (empty = change nothing): " -a wanted_in || true
 
-if [ "${#wanted_in[@]}" -eq 0 ]; then
-  echo "Nothing changed."; exit 0
-fi
-
-declare -A cur seen
+declare -A cur=() pending=()
 for m in $current; do cur[${m%=*}]=${m#*=}; done
-changes=()
-report=()
-for m in "${wanted_in[@]}"; do
-  if ! [[ "$m" =~ ^([0-9]+)=([0-9]+)$ ]]; then
-    echo "Invalid mapping: $m (use HTTPS=TARGET)" >&2; exit 1
-  fi
-  h=${BASH_REMATCH[1]}; t=${BASH_REMATCH[2]}
-  [ "$h" -ge 1 ] && [ "$h" -le 65535 ] || { echo "Invalid HTTPS port: $m" >&2; exit 1; }
-  [ "$t" -ge 1 ] && [ "$t" -le 65535 ] || { echo "Invalid target port: $m" >&2; exit 1; }
-  [ -z "${seen[$h]:-}" ] || { echo "HTTPS port $h given twice" >&2; exit 1; }
-  seen[$h]=1
-  if [ -z "${cur[$h]:-}" ]; then
-    report+=("  added    $h=$t"); changes+=("$h=$t")
-  elif [ "${cur[$h]}" != "$t" ]; then
-    report+=("  changed  $h=$t (was $h=${cur[$h]})"); changes+=("$h=$t")
-  else
-    report+=("  kept     $h=$t")
-  fi
-done
-for h in $(printf '%s\n' "${!cur[@]}" | sort -n); do
-  [ -n "${seen[$h]:-}" ] || report+=("  kept     $h=${cur[$h]}")
+
+show_state() {
+  # Active mappings, with not yet applied ones marked.
+  local h lines=()
+  for h in $(printf '%s\n' "${!cur[@]}" "${!pending[@]}" | sort -nu); do
+    if [ -n "${pending[$h]:-}" ]; then
+      if [ -n "${cur[$h]:-}" ]; then
+        lines+=("  $h=${pending[$h]}  (pending, was $h=${cur[$h]})")
+      else
+        lines+=("  $h=${pending[$h]}  (pending, new)")
+      fi
+    else
+      lines+=("  $h=${cur[$h]}")
+    fi
+  done
+  echo
+  echo "Mappings now (HTTPS=target):"
+  if [ "${#lines[@]}" -eq 0 ]; then echo "  none"; else printf '%s\n' "${lines[@]}"; fi
+}
+
+while :; do
+  show_state
+  wanted_in=()
+  read -r -p "Mappings (empty = finish): " -a wanted_in || true
+  [ "${#wanted_in[@]}" -gt 0 ] || break
+  declare -A line_seen=()
+  for m in "${wanted_in[@]}"; do
+    if ! [[ "$m" =~ ^([0-9]+)=([0-9]+)$ ]]; then
+      echo "Invalid mapping: $m (use HTTPS=TARGET), ignored" >&2; continue
+    fi
+    h=${BASH_REMATCH[1]}; t=${BASH_REMATCH[2]}
+    if ! { [ "$h" -ge 1 ] && [ "$h" -le 65535 ]; }; then echo "Invalid HTTPS port: $m, ignored" >&2; continue; fi
+    if ! { [ "$t" -ge 1 ] && [ "$t" -le 65535 ]; }; then echo "Invalid target port: $m, ignored" >&2; continue; fi
+    if [ -n "${line_seen[$h]:-}" ]; then echo "HTTPS port $h given twice: $m, ignored" >&2; continue; fi
+    line_seen[$h]=1
+    if [ "${cur[$h]:-}" = "$t" ]; then
+      unset "pending[$h]"
+    else
+      pending[$h]=$t
+    fi
+  done
 done
 
-echo
-echo "Resulting state:"
-printf '%s\n' "${report[@]}"
-if [ "${#changes[@]}" -eq 0 ]; then
-  echo "Nothing to change."; exit 0
+if [ "${#pending[@]}" -eq 0 ]; then
+  echo "Nothing changed."; exit 0
 fi
 read -r -p "Apply? [y/N] " ok || true
 [ "${ok:-n}" = "y" ] || [ "${ok:-n}" = "Y" ] || { echo "Nothing changed."; exit 0; }
 
-for m in "${changes[@]}"; do
-  ts tailscale serve --bg --https="${m%=*}" "http://127.0.0.1:${m#*=}"
+for h in $(printf '%s\n' "${!pending[@]}" | sort -n); do
+  ts tailscale serve --bg --https="$h" "http://127.0.0.1:${pending[$h]}"
 done
 save_current
 echo
