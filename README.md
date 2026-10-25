@@ -168,6 +168,10 @@ skipped. `./tsports.sh --apply` does the same by hand.
 `./tsports.sh` keeps prompting (showing the active mappings each round) until
 you enter an empty line, then asks to apply the collected changes.
 
+`./tsname.sh` prints the box's full Tailscale DNS name (e.g.
+`devbox-general.tapir-perch.ts.net`, no `https://`), for use as
+`https://$(./tsname.sh):8443`.
+
 One-time tailnet setup (admin console):
 
 1. Define `tag:devbox` (owner `autogroup:admin`) and replace the default
