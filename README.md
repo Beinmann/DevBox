@@ -172,6 +172,12 @@ you enter an empty line, then asks to apply the collected changes.
 `devbox-general.tapir-perch.ts.net`, no `https://`), for use as
 `https://$(./tsname.sh):8443`.
 
+Use the full name for HTTPS ports. Tailscale issues the certificate for the
+full MagicDNS name only, so `https://devbox-general/` (short name) fails with
+a TLS "internal error" (Firefox: `SSL_ERROR_INTERNAL_ERROR_ALERT`), while
+`https://devbox-general.<tailnet>.ts.net/` works. Plain HTTP ports (e.g.
+`http://devbox-general:8000`) work with the short name.
+
 One-time tailnet setup (admin console):
 
 1. Define `tag:devbox` (owner `autogroup:admin`) and replace the default
