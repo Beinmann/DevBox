@@ -158,8 +158,7 @@ The first time Tailscale is enabled for a devbox dir you are asked for the
 short name, with a preview of the final node name (default: the sanitized dir
 name, or the parent dir's name if the dir is just `devbox`). It is kept in
 `./.devbox-tailscale-name` (gitignored); delete that file to be asked again.
-Renaming recreates the sidecar and the box (stop and start). The 3-char
-suffix is generated once and kept in `./tailscale-state/`. Without a TTY
+Renaming recreates the sidecar and the box (stop and start). Without a TTY
 nothing is asked or saved and the default is used.
 
 HTTPS port mappings chosen with `./tsports.sh` are saved in `./https-ports`

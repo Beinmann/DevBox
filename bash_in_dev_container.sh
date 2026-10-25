@@ -82,7 +82,7 @@ TS_ENV_FILE="${TAILSCALE_ENV_FILE:-$HOME/.config/devbox/tailscale.env}"
 TS_NO_PROMPT_MARKER="$(dirname "$TS_ENV_FILE")/no-tailscale-prompt"
 if [ ! -f "$TS_ENV_FILE" ] && [ -t 0 ] && [ ! -e "$TS_NO_PROMPT_MARKER" ]; then
   echo "==> Tailscale is not set up (no $TS_ENV_FILE)."
-  echo "    With it, each devbox joins your tailnet as devbox-<name>-<xyz> and its"
+  echo "    With it, each devbox joins your tailnet as devbox-<name> and its"
   echo "    ports (even localhost-only ones) are reachable from your other devices."
   echo "    Needs a one-time tailnet setup first, see README."
   echo "    1) Enter the OAuth client secret now (saved to that file, mode 600)"
@@ -129,17 +129,10 @@ if [ -f "$TS_ENV_FILE" ]; then
   fi
   COMPOSE_FILES+=(-f docker-compose.tailscale.yml)
   TS_ENABLED=1
-  # Node name: devbox-<short name>-<3 random chars>. The suffix is generated
-  # once and kept in the (sidecar-only) state dir, so it is unique across
-  # clones but stable across restarts (cert reuse, no node churn). The short
-  # name is asked for once per devbox dir and kept in ./.devbox-tailscale-name
-  # (delete it to be asked again).
+  # Node name: devbox-<short name>. The short name is asked for once per
+  # devbox dir and kept in ./.devbox-tailscale-name (delete it to be asked
+  # again).
   mkdir -p -m 700 ./tailscale-state
-  if [ ! -s ./tailscale-state/hostname-suffix ]; then
-    # pipefail scoped off, see the .devbox_id comment below.
-    (set +o pipefail; tr -dc 'a-z0-9' < /dev/urandom 2>/dev/null | head -c3) > ./tailscale-state/hostname-suffix
-  fi
-  ts_suffix=$(cat ./tailscale-state/hostname-suffix)
   # lowercase a-z0-9-, runs of other chars become one hyphen, trimmed, max 40
   ts_sanitize() {
     printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | sed 's/^-//; s/-$//' \
@@ -153,7 +146,7 @@ if [ -f "$TS_ENV_FILE" ]; then
     ts_short=$ts_saved
   elif [ -t 0 ]; then
     while :; do
-      echo "==> Node name will be: devbox-${ts_short}-${ts_suffix}"
+      echo "==> Node name will be: devbox-${ts_short}"
       read -rp "    Enter to accept, or type another short name: " ts_input
       [ -n "$ts_input" ] || break
       ts_new=$(ts_sanitize "$ts_input")
@@ -167,7 +160,7 @@ if [ -f "$TS_ENV_FILE" ]; then
     echo "    Saved in ./.devbox-tailscale-name (delete it to be asked again; renaming"
     echo "    recreates the sidecar and the box)."
   fi
-  TS_HOSTNAME="devbox-${ts_short}-${ts_suffix}"
+  TS_HOSTNAME="devbox-${ts_short}"
   echo "==> Tailscale enabled, node name: $TS_HOSTNAME"
 else
   TS_ENV_FILE=/dev/null
