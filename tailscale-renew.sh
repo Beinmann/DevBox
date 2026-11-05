@@ -23,6 +23,6 @@ fi
 [ -n "${TS_AUTHKEY:-}" ] || { echo "tailscale-renew: no TS_AUTHKEY in the sidecar" >&2; exit 1; }
 echo "tailscale-renew: re-registering ${TS_HOSTNAME:-devbox}" >&2
 # --reset: `up` refuses to run when it would change non-default settings
-# unless they're all listed; list what containerboot sets.
+# unless they're all listed; list what the sidecar entrypoint sets.
 exec tailscale up --reset --auth-key="$TS_AUTHKEY" --hostname="${TS_HOSTNAME:-devbox}" \
   --advertise-tags=tag:devbox --accept-dns=false
