@@ -178,6 +178,12 @@ a TLS "internal error" (Firefox: `SSL_ERROR_INTERNAL_ERROR_ALERT`), while
 `https://devbox-general.<tailnet>.ts.net/` works. Plain HTTP ports (e.g.
 `http://devbox-general:8000`) work with the short name.
 
+If the registration runs out (box open for a long time, or the PC slept),
+the sidecar notices within ~30 s and re-registers itself
+(`tailscale-renew.sh`, using the key it already has; the box is not
+restarted). To do it immediately, run `./tsrenew.sh`: it renews, re-applies
+the saved HTTPS ports and prints the node's DNS name.
+
 One-time tailnet setup (admin console):
 
 1. Define `tag:devbox` (owner `autogroup:admin`) and replace the default

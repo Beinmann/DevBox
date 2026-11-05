@@ -36,6 +36,9 @@ services:
       - |
         iptables -I OUTPUT -d 100.64.0.0/10 -j REJECT
         ip6tables -I OUTPUT -d fd7a:115c:a1e0::/48 -j REJECT || true
+        # Watchdog: re-register if the node's registration is lost (PC sleep,
+        # long idle). Never restarts the sidecar (the box would keep a dead netns).
+        ( while :; do sleep 30; /usr/local/bin/tailscale-renew.sh || true; done ) &
         exec /usr/local/bin/containerboot
     # Host-side file with TS_AUTHKEY=<OAuth client secret>?ephemeral=true&preauthorized=true
     # (outside the repo and ./home). Read by Compose as root and handed only
@@ -51,6 +54,7 @@ services:
       # Node key and cached certs. A bind mount, not a named volume, so
       # `compose down` leaves Docker clean. Mounted here only, never in the box.
       - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-renew.sh:/usr/local/bin/tailscale-renew.sh:ro
 
   my-dev-container:
     network_mode: service:tailscale
