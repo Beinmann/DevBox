@@ -5,7 +5,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 
 usage() {
   cat <<'USAGE'
-Usage: ./bash_in_dev_container.sh [options]
+Usage: ./start.sh [options]
 
 Starts the devbox (if needed) and, by default, attaches the tmux session.
 

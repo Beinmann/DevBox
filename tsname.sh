@@ -2,7 +2,7 @@
 # Print this devbox's full Tailscale DNS name (node name plus tailnet part, no
 # https://, no trailing dot), e.g. devbox-general.tapir-perch.ts.net, so URLs
 # can be built with $(./tsname.sh). Needs the Tailscale sidecar to be running
-# (start the box with ./bash_in_dev_container.sh first).
+# (start the box with ./start.sh first).
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -19,7 +19,7 @@ name=$(ts tailscale status --json --peers=false 2>/dev/null \
 name=${name%.}
 
 if [ -z "$name" ]; then
-  echo "Tailscale not enabled or sidecar not running for this dir. Start it with ./bash_in_dev_container.sh" >&2
+  echo "Tailscale not enabled or sidecar not running for this dir. Start it with ./start.sh" >&2
   exit 1
 fi
 echo "$name"

@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-# Export for docker-compose.yml's build.args (see bash_in_dev_container.sh).
+# Export for docker-compose.yml's build.args (see start.sh).
 export USER_UID="$(id -u)"
 export USER_GID="$(id -g)"
 

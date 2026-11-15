@@ -3,14 +3,14 @@
 # tailnet (`tailscale serve`). A mapping HTTPS=TARGET, e.g. 8443=3000, makes
 # https://<node>.<tailnet>.ts.net:8443 forward to 127.0.0.1:3000 in the box.
 # Needs the Tailscale sidecar to be running (start the box with
-# ./bash_in_dev_container.sh first) and "HTTPS Certificates" enabled once in
+# ./start.sh first) and "HTTPS Certificates" enabled once in
 # the Tailscale admin console (DNS page). `serve` only, never `funnel`:
 # nothing becomes public (only Funnel, never used here, is limited to the
 # HTTPS ports 443, 8443 and 10000).
 #
 # The applied mappings are saved to ./https-ports (one HTTPS=TARGET per line,
 # gitignored). `./tsports.sh --apply` re-applies that file without prompting;
-# bash_in_dev_container.sh calls it after the box is up. Invalid entries are
+# start.sh calls it after the box is up. Invalid entries are
 # reported and skipped.
 set -euo pipefail
 
@@ -84,7 +84,7 @@ case "${1:-}" in
 esac
 
 if ! ts tailscale status >/dev/null 2>&1; then
-  echo "Tailscale sidecar not running for this dir. Start it with ./bash_in_dev_container.sh" >&2
+  echo "Tailscale sidecar not running for this dir. Start it with ./start.sh" >&2
   exit 1
 fi
 

@@ -25,7 +25,7 @@ polluting the host, and rebuilding from scratch is cheap.
 ```bash
 git clone git@github.com:Beinmann/DevBox.git
 cd DevBox
-./bash_in_dev_container.sh
+./start.sh
 ```
 
 That single script:
@@ -50,7 +50,7 @@ as needed.
 ## Usage
 
 ```bash
-./bash_in_dev_container.sh
+./start.sh
 ```
 
 The container **persists** after you exit the shell — it keeps running in
@@ -64,7 +64,7 @@ Options:
 
 - `-c`, `--run CMD`: run `CMD` in the devbox (`bash -lc`) instead of attaching
   tmux; the script exits with the command's status. Example:
-  `./bash_in_dev_container.sh --run 'ls -la'`.
+  `./start.sh --run 'ls -la'`.
 - `-n`, `--no-enter`: only start the devbox, don't attach interactively.
 - `-e`, `--enter`: attach interactively (the default). Reverses `--no-enter`;
   with both, the last one wins. `DEVBOX_ENTER=0` makes `--no-enter` the
@@ -111,7 +111,7 @@ lost, but it's dead weight you can delete once you've migrated what you need.
 ## Why the wrapper script?
 
 `docker compose` won't run directly in this repo — it's gated by a required
-env var (`DEV_BOX_WRAPPER`) that only `bash_in_dev_container.sh` sets. This
+env var (`DEV_BOX_WRAPPER`) that only `start.sh` sets. This
 isn't a security boundary, just a guardrail: calling `docker compose` bare
 would skip the first-run seeding step (step 2 above) and silently ship a
 container where `claude`/`opencode` are missing, since the image's built-in
@@ -134,7 +134,7 @@ running on the old image until you stop and start it again:
 
 ```bash
 ./stop_dev_container.sh
-./bash_in_dev_container.sh
+./start.sh
 ```
 
 `docker compose up -d` recreates the container from the updated image since
@@ -148,7 +148,7 @@ port, a web UI listing your boxes, and any container port at
 `http://<port>.<container>.localhost:<proxy port>/`.
 
 - All boxes join one shared Docker network, `devbox-net` (created by
-  `bash_in_dev_container.sh` if missing), which is how the proxy reaches
+  `start.sh` if missing), which is how the proxy reaches
   them by container name. Side effect: boxes can also reach *each other*
   on that network, so they're not network-isolated from one another.
 - **Dev servers must listen on `0.0.0.0`**, not just `localhost`/`127.0.0.1`,
@@ -178,7 +178,7 @@ nothing is asked or saved and the default is used.
 
 HTTPS port mappings chosen with `./tsports.sh` are saved in `./https-ports`
 (gitignored, one `HTTPS=TARGET` per line) and re-applied by
-`./bash_in_dev_container.sh` on every start; invalid lines are reported and
+`./start.sh` on every start; invalid lines are reported and
 skipped. `./tsports.sh --apply` does the same by hand.
 `./tsports.sh` keeps prompting (showing the active mappings each round) until
 you enter an empty line, then asks to apply the collected changes.

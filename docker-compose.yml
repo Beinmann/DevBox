@@ -1,4 +1,4 @@
-# Bring the dev box up on demand via ./bash_in_dev_container.sh — do not call
+# Bring the dev box up on demand via ./start.sh — do not call
 # `docker compose` directly. The container persists across exits (`up -d` +
 # `exec`) until explicitly torn down via ./stop_dev_container.sh. All
 # persistent state lives in the bind mounts below (./home and ./Everything),
@@ -9,7 +9,7 @@
 # (including custom x- fields) before doing anything else, so an unset
 # DEV_BOX_WRAPPER makes any direct `docker compose ...` invocation fail
 # immediately with the message below. Only the wrapper script sets that var.
-x-require-wrapper: "${DEV_BOX_WRAPPER:?Use ./bash_in_dev_container.sh instead of calling docker compose directly}"
+x-require-wrapper: "${DEV_BOX_WRAPPER:?Use ./start.sh instead of calling docker compose directly}"
 
 services:
   my-dev-container:
@@ -17,7 +17,7 @@ services:
       context: .
       dockerfile: Dockerfile
       # Only used the (rare) time Compose actually builds — on first run, or
-      # after ./rebuild_image_after_change.sh. bash_in_dev_container.sh
+      # after ./rebuild_image_after_change.sh. start.sh
       # exports these from the host so the container's `dev` user matches
       # you; default here only covers a bare `docker compose build`.
       args:
@@ -26,7 +26,7 @@ services:
     image: my-dev-box-v2
     # Compose's default pull_policy ("missing") still tries a registry pull
     # first even when a `build` section is present, only falling back to
-    # building on failure. bash_in_dev_container.sh passes `--pull never` on
+    # building on failure. start.sh passes `--pull never` on
     # `docker compose up` to skip that pull attempt entirely and go straight
     # to build (only if the image is missing) or reuse the cached local
     # image. (`docker compose build` never attempts that pull regardless.)
@@ -51,7 +51,7 @@ services:
       # Project workspace, mounted where WORKDIR expects it.
       - ./Everything:/home/dev/Main/Everything
     # Optional secrets (e.g. CLAUDE_CODE_OAUTH_TOKEN=...) as KEY=VALUE lines.
-    # bash_in_dev_container.sh points DEVBOX_ENV_FILE at
+    # start.sh points DEVBOX_ENV_FILE at
     # ~/.config/devbox/env on the host; falls back to an empty file if unset.
     # Read by Compose itself (as root, via sudo) so the token never appears
     # in process args or the sudo-stripped environment.

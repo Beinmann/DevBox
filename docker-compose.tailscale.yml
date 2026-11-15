@@ -1,4 +1,4 @@
-# Optional Tailscale sidecar. bash_in_dev_container.sh / stop_dev_container.sh
+# Optional Tailscale sidecar. start.sh / stop_dev_container.sh
 # add this file with `-f` (never edit docker-compose.yml for it); when
 # Tailscale is not set up on the host, the sidecar is not started. Like the
 # base file it must not be used with `docker compose` directly.
@@ -14,7 +14,7 @@
 # its config changed (e.g. Tailscale toggled); if only the sidecar is
 # recreated the box keeps a dead netns, so restart both with
 # ./stop_dev_container.sh.
-x-require-wrapper: "${DEV_BOX_WRAPPER:?Use ./bash_in_dev_container.sh instead of calling docker compose directly}"
+x-require-wrapper: "${DEV_BOX_WRAPPER:?Use ./start.sh instead of calling docker compose directly}"
 
 services:
   tailscale:

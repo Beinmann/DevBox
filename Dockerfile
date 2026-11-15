@@ -99,7 +99,7 @@ RUN curl -fsSL https://github.com/neovim/neovim/releases/latest/download/nvim-li
 # native installers fetch the platform binary directly, sidestepping that.
 #
 # Installed as the `dev` user straight into /home/dev (~/.local, ~/.opencode),
-# so there is exactly one copy per devbox: bash_in_dev_container.sh seeds
+# so there is exactly one copy per devbox: start.sh seeds
 # ./home from this directory on first run, and from then on that copy lives
 # in the bind mount, owned by `dev`, where Claude's auto-updater can replace
 # it. (Do not install system-wide under /opt + /usr/local/bin: that copy is
@@ -118,7 +118,7 @@ RUN curl -fsSL https://opencode.ai/install | bash
 RUN claude --version && opencode --version
 
 # dotfilesv3 (+ submodules, all public HTTPS), cloned as `dev` so it lands in
-# the /home/dev that bash_in_dev_container.sh seeds into ./home. Only cloned,
+# the /home/dev that start.sh seeds into ./home. Only cloned,
 # not stowed. Target dir is capital-V `dotfilesV3`.
 RUN mkdir -p /home/dev/Main \
     && git clone --recurse-submodules https://github.com/Beinmann/dotfilesv3 \
