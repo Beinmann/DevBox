@@ -3,6 +3,52 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+usage() {
+  cat <<'USAGE'
+Usage: ./bash_in_dev_container.sh [options]
+
+Starts the devbox (if needed) and, by default, attaches the tmux session.
+
+Options:
+  -c, --run CMD   Run CMD in the devbox (bash -lc, in /home/dev/Main/Everything)
+                  instead of attaching tmux. The script exits with CMD's status.
+  -n, --no-enter  Only start the devbox; do not attach interactively.
+  -e, --enter     Attach interactively (the default); undoes --no-enter.
+                  With both, the last one wins. Set DEVBOX_ENTER=0 to make
+                  --no-enter the default (--enter then re-enables it).
+      --dry-run   Parse the options, print what would happen and exit, before
+                  touching docker or any prompt.
+  -h, --help      Show this help.
+
+--run takes precedence over --enter/--no-enter.
+USAGE
+}
+
+# 0. Options. ENTER defaults to 1 unless DEVBOX_ENTER is 0/no/false.
+case "${DEVBOX_ENTER:-1}" in 0|no|false|NO|FALSE) ENTER=0 ;; *) ENTER=1 ;; esac
+RUN_CMD=""
+HAVE_RUN=0
+DRY_RUN=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -c|--run)
+      if [ $# -lt 2 ]; then echo "$1 needs a command argument" >&2; exit 2; fi
+      RUN_CMD="$2"; HAVE_RUN=1; shift 2 ;;
+    --run=*) RUN_CMD="${1#--run=}"; HAVE_RUN=1; shift ;;
+    -n|--no-enter) ENTER=0; shift ;;
+    -e|--enter) ENTER=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+if [ "$DRY_RUN" = 1 ]; then
+  if [ "$HAVE_RUN" = 1 ]; then echo "would: start devbox, then run: $RUN_CMD"
+  elif [ "$ENTER" = 1 ]; then echo "would: start devbox, then attach tmux session main"
+  else echo "would: start devbox only (no enter)"; fi
+  exit 0
+fi
+
 IMAGE="my-dev-box-v2"
 
 # 1. Export the host UID/GID for docker-compose.yml's build.args to pick
@@ -251,4 +297,15 @@ compose up --pull never -d --remove-orphans
 if [ -n "$TS_ENABLED" ] && [ -s ./https-ports ]; then
   ./tsports.sh --apply || true
 fi
-compose exec my-dev-container tmux new-session -A -s main
+if [ "$HAVE_RUN" = 1 ]; then
+  # No TTY allocation unless both stdin and stdout are terminals.
+  tty_flag=()
+  { [ -t 0 ] && [ -t 1 ]; } || tty_flag=(-T)
+  exec sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" \
+    TS_ENV_FILE="$TS_ENV_FILE" TS_HOSTNAME="$TS_HOSTNAME" \
+    docker compose "${COMPOSE_FILES[@]}" exec "${tty_flag[@]}" my-dev-container bash -lc "$RUN_CMD"
+elif [ "$ENTER" = 1 ]; then
+  compose exec my-dev-container tmux new-session -A -s main
+else
+  echo "==> Devbox is up (not entering; run the script again, or with --enter, to attach)."
+fi

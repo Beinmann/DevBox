@@ -60,6 +60,21 @@ processes, a `tmux` session, etc.) survives until you reattach. It does
 script again just reattaches a new `bash` shell to the same container; run
 it from as many terminals as you like.
 
+Options:
+
+- `-c`, `--run CMD`: run `CMD` in the devbox (`bash -lc`) instead of attaching
+  tmux; the script exits with the command's status. Example:
+  `./bash_in_dev_container.sh --run 'ls -la'`.
+- `-n`, `--no-enter`: only start the devbox, don't attach interactively.
+- `-e`, `--enter`: attach interactively (the default). Reverses `--no-enter`;
+  with both, the last one wins. `DEVBOX_ENTER=0` makes `--no-enter` the
+  default, and `--enter` then re-enables attaching.
+- `--dry-run`: parse the options, print what would happen and exit without
+  touching Docker.
+- `-h`, `--help`: show the help.
+
+`--run` takes precedence over `--enter`/`--no-enter`.
+
 To tear the container down when you're done with it:
 
 ```bash
