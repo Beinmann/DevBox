@@ -83,21 +83,22 @@ export USER_GID="$(id -g)"
 #     (no terminal, no start). Only allowed inside an Incus/LXC instance,
 #     because the socket is root-equivalent on the machine owning the daemon;
 #     DEVBOX_DOCKER_ANYWHERE=1 overrides that check.
-case "$DOCKER_FLAG" in
-  on) touch ./.devbox-docker ;;
-  off) rm -f ./.devbox-docker ;;
-esac
+# The marker is only created after the checks and the confirmation below
+# pass, so a refused `--docker` leaves nothing behind.
+[ "$DOCKER_FLAG" != off ] || rm -f ./.devbox-docker
 DOCKER_ENABLED=""
 DOCKER_SOCK_GID=""
 DOCKER_CLI_PATH=""
-if [ -e ./.devbox-docker ]; then
-  if [ ! -S /var/run/docker.sock ] || ! DOCKER_CLI_PATH="$(command -v docker)"; then
-    echo "==> Docker access is on (./.devbox-docker) but /var/run/docker.sock or the docker CLI is missing." >&2
+if [ -e ./.devbox-docker ] || [ "$DOCKER_FLAG" = on ]; then
+  # readlink -f: mount the real binary, not a symlink/alternatives entry
+  # (a dynamically linked CLI may still not run in the box).
+  if [ ! -S /var/run/docker.sock ] || ! DOCKER_CLI_PATH="$(readlink -f "$(command -v docker)")"; then
+    echo "==> Docker access was requested but /var/run/docker.sock or the docker CLI is missing." >&2
     exit 1
   fi
   if [ "${DEVBOX_DOCKER_ANYWHERE:-0}" != 1 ] \
      && [ "$(systemd-detect-virt --container 2>/dev/null || true)" != lxc ]; then
-    echo "==> Docker access is on (./.devbox-docker) but this does not look like an Incus/LXC instance." >&2
+    echo "==> Docker access was requested (./.devbox-docker or --docker) but this does not look like an Incus/LXC instance." >&2
     echo "    The Docker socket is root-equivalent on this machine, so it is only" >&2
     echo "    allowed inside an instance. Run ./start.sh --no-docker, or set" >&2
     echo "    DEVBOX_DOCKER_ANYWHERE=1 if you are sure." >&2
@@ -117,7 +118,8 @@ if [ -e ./.devbox-docker ]; then
     exit 1
   fi
   read -rp "    Start with Docker access? [y/N] " docker_ok
-  case "$docker_ok" in y|Y|yes|YES) ;; *) echo "==> Cancelled."; exit 0 ;; esac
+  case "$docker_ok" in y|Y|yes|YES) ;; *) echo "==> Cancelled, not starting."; exit 1 ;; esac
+  touch ./.devbox-docker
   DOCKER_SOCK_GID="$(stat -c %g /var/run/docker.sock)"
   DOCKER_ENABLED=1
 fi
@@ -363,7 +365,8 @@ fi
 # "groups: cannot find name for group ID"); lost on recreate, so every start.
 if [ -n "$DOCKER_ENABLED" ]; then
   compose exec -T my-dev-container sudo sh -c \
-    "getent group $DOCKER_SOCK_GID >/dev/null || groupadd -g $DOCKER_SOCK_GID hostdocker"
+    "getent group $DOCKER_SOCK_GID >/dev/null || groupadd -g $DOCKER_SOCK_GID hostdocker" \
+    || echo "==> Warning: could not name group $DOCKER_SOCK_GID in the box (harmless: only 'cannot find name for group ID' on shell start)." >&2
 fi
 if [ "$HAVE_RUN" = 1 ]; then
   # No TTY allocation unless both stdin and stdout are terminals.
