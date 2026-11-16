@@ -263,6 +263,40 @@ the socket). It is per devbox dir, never global.
   and node key). The Incus instance is the isolation boundary, not the box.
 - `docker compose` (plugin) is not mounted, only the `docker` CLI.
 
+### Incus host prerequisites
+
+On the host that runs Incus (nftables firewall driver, check with
+`sudo incus info | grep -i firewall`):
+
+- Instance created with `security.nesting=true`; Docker installed in it.
+- If the host also runs Docker: set `"ip-forward-no-drop": true` in the
+  host's `/etc/docker/daemon.json` (and `net.ipv4.ip_forward=1`), or the
+  instance has no internet after Docker's FORWARD DROP policy.
+- **Keep the instance away from the tailnet and the LAN.** Without this,
+  anything in the instance (including a box with Docker access) reaches your
+  tailnet devices through the host's own Tailscale (arriving as the host) and
+  every device on your LAN, e.g. the router:
+
+      sudo incus network acl create no-tailnet
+      sudo incus network acl rule add no-tailnet egress action=reject destination=100.64.0.0/10
+      sudo incus network acl rule add no-tailnet egress action=reject destination=fd7a:115c:a1e0::/48
+      sudo incus network acl create no-lan
+      sudo incus network acl rule add no-lan egress action=reject destination=192.168.0.0/16
+      sudo incus network acl rule add no-lan egress action=reject destination=172.16.0.0/12
+      sudo incus network set incusbr0 security.acls=no-tailnet,no-lan \
+        security.acls.default.egress.action=allow \
+        security.acls.default.ingress.action=allow
+
+  The two `default ... allow` settings are needed: once an ACL is attached,
+  Incus rejects unmatched traffic and the instance loses its internet.
+  Adjust the LAN ranges to your network. Undo with
+  `sudo incus network unset incusbr0 security.acls`. Check from inside the
+  instance: a TCP connect to a tailnet peer and to your router
+  (`timeout 3 bash -c '</dev/tcp/<ip>/<port>'`) must be refused while
+  `curl -sI http://archive.ubuntu.com` still answers.
+- The instance is unprivileged and shares no host paths, but it shares the
+  host kernel; for really hostile code use `incus launch --vm`.
+
 ## Notes
 
 - No ports are published and no host directories other than `./home` and
