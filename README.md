@@ -294,6 +294,12 @@ On the host that runs Incus (nftables firewall driver, check with
   instance: a TCP connect to a tailnet peer and to your router
   (`timeout 3 bash -c '</dev/tcp/<ip>/<port>'`) must be refused while
   `curl -sI http://archive.ubuntu.com` still answers.
+- **Turn IPv6 off on the bridge** (`sudo incus network set incusbr0
+  ipv6.address=none`, then restart the instance). If your LAN hands out
+  global IPv6, the instance would otherwise reach LAN devices over IPv6
+  (NATed to the host's address) past the IPv4 rules above, and an ISP prefix
+  is dynamic, so a prefix-based reject rule would silently go stale. The
+  instance then runs IPv4-only.
 - The instance is unprivileged and shares no host paths, but it shares the
   host kernel; for really hostile code use `incus launch --vm`.
 
