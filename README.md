@@ -303,6 +303,20 @@ On the host that runs Incus (nftables firewall driver, check with
 - The instance is unprivileged and shares no host paths, but it shares the
   host kernel; for really hostile code use `incus launch --vm`.
 
+### Published ports and Tailscale
+
+A container the box starts through the instance's Docker publishes `-p`
+ports on the *instance*, not in the Tailscale sidecar's network namespace
+that the box shares. So such a port is not reachable at the devbox's
+tailnet name (servers started directly in the box are), and the LAN is
+deliberately cut off (see the ACLs above). Options: a `socat` forwarder in
+the box to the instance's Docker bridge gateway, `docker run --network
+container:<box>` (no `-p`; dies when the box is recreated), or a Tailscale
+node on the instance itself (userspace networking, its own tag, tailnet
+policy allowing only your devices), see ticket 043. The instance node exposes
+every published port of every container, and a box with the Docker socket
+can read its key, so the tailnet policy is the protection.
+
 ## Notes
 
 - No ports are published and no host directories other than `./home` and
