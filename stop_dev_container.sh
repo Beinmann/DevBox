@@ -10,4 +10,5 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 # fallbacks) and --remove-orphans is set, so the sidecar and the default
 # network go away too, whether or not Tailscale is currently enabled.
 sudo env DEV_BOX_WRAPPER=1 docker compose \
-  -f docker-compose.yml -f docker-compose.tailscale.yml down --remove-orphans
+  -f docker-compose.yml -f docker-compose.tailscale.yml \
+  -f docker-compose.docker.yml down --remove-orphans

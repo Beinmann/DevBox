@@ -3,3 +3,4 @@ home
 tailscale-state
 .devbox-tailscale-name
 https-ports
+.devbox-docker

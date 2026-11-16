@@ -16,6 +16,12 @@ Options:
   -e, --enter     Attach interactively (the default); undoes --no-enter.
                   With both, the last one wins. Set DEVBOX_ENTER=0 to make
                   --no-enter the default (--enter then re-enables it).
+      --docker    Enable Docker access for this devbox: the box gets the
+                  Docker socket and CLI of the machine it runs on. Only
+                  allowed inside an Incus/LXC instance; warns and asks for
+                  confirmation on every start. Remembered per devbox dir in
+                  ./.devbox-docker.
+      --no-docker Disable it again (removes ./.devbox-docker).
       --dry-run   Parse the options, print what would happen and exit, before
                   touching docker or any prompt.
   -h, --help      Show this help.
@@ -29,6 +35,7 @@ case "${DEVBOX_ENTER:-1}" in 0|no|false|NO|FALSE) ENTER=0 ;; *) ENTER=1 ;; esac
 RUN_CMD=""
 HAVE_RUN=0
 DRY_RUN=0
+DOCKER_FLAG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -c|--run)
@@ -37,12 +44,19 @@ while [ $# -gt 0 ]; do
     --run=*) RUN_CMD="${1#--run=}"; HAVE_RUN=1; shift ;;
     -n|--no-enter) ENTER=0; shift ;;
     -e|--enter) ENTER=1; shift ;;
+    --docker) DOCKER_FLAG=on; shift ;;
+    --no-docker) DOCKER_FLAG=off; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 if [ "$DRY_RUN" = 1 ]; then
+  case "$DOCKER_FLAG" in
+    on) echo "would: enable Docker access (./.devbox-docker), after warning + confirmation" ;;
+    off) echo "would: disable Docker access (remove ./.devbox-docker)" ;;
+    *) [ ! -e ./.devbox-docker ] || echo "would: use Docker access (./.devbox-docker), after warning + confirmation" ;;
+  esac
   if [ "$HAVE_RUN" = 1 ]; then echo "would: start devbox, then run: $RUN_CMD"
   elif [ "$ENTER" = 1 ]; then echo "would: start devbox, then attach tmux session main"
   else echo "would: start devbox only (no enter)"; fi
@@ -62,6 +76,52 @@ IMAGE="my-dev-box-v2"
 #    ./rebuild_image_after_change.sh's job, not this script's.
 export USER_UID="$(id -u)"
 export USER_GID="$(id -g)"
+
+# 1a. Optional Docker access for the box (see docker-compose.docker.yml).
+#     Opt-in per devbox dir: `--docker` creates ./.devbox-docker, `--no-docker`
+#     removes it. While the marker exists, every start warns and needs a "y"
+#     (no terminal, no start). Only allowed inside an Incus/LXC instance,
+#     because the socket is root-equivalent on the machine owning the daemon;
+#     DEVBOX_DOCKER_ANYWHERE=1 overrides that check.
+case "$DOCKER_FLAG" in
+  on) touch ./.devbox-docker ;;
+  off) rm -f ./.devbox-docker ;;
+esac
+DOCKER_ENABLED=""
+DOCKER_SOCK_GID=""
+DOCKER_CLI_PATH=""
+if [ -e ./.devbox-docker ]; then
+  if [ ! -S /var/run/docker.sock ] || ! DOCKER_CLI_PATH="$(command -v docker)"; then
+    echo "==> Docker access is on (./.devbox-docker) but /var/run/docker.sock or the docker CLI is missing." >&2
+    exit 1
+  fi
+  if [ "${DEVBOX_DOCKER_ANYWHERE:-0}" != 1 ] \
+     && [ "$(systemd-detect-virt --container 2>/dev/null || true)" != lxc ]; then
+    echo "==> Docker access is on (./.devbox-docker) but this does not look like an Incus/LXC instance." >&2
+    echo "    The Docker socket is root-equivalent on this machine, so it is only" >&2
+    echo "    allowed inside an instance. Run ./start.sh --no-docker, or set" >&2
+    echo "    DEVBOX_DOCKER_ANYWHERE=1 if you are sure." >&2
+    exit 1
+  fi
+  echo "==> WARNING: Docker access is enabled for this devbox." >&2
+  echo "    The box (and any AI agent in it) gets this machine's Docker socket:" >&2
+  echo "    root-equivalent on this machine, including everything else in it" >&2
+  echo "    (other devboxes, their files, the Docker daemon)." >&2
+  if [ -f "${TAILSCALE_ENV_FILE:-$HOME/.config/devbox/tailscale.env}" ]; then
+    echo "    Tailscale is set up: the sidecar runs in the same daemon, so the box" >&2
+    echo "    can stop or inspect it and read its secret and node key." >&2
+  fi
+  echo "    Disable with ./start.sh --no-docker." >&2
+  if [ ! -t 0 ]; then
+    echo "==> No terminal to confirm on, not starting." >&2
+    exit 1
+  fi
+  read -rp "    Start with Docker access? [y/N] " docker_ok
+  case "$docker_ok" in y|Y|yes|YES) ;; *) echo "==> Cancelled."; exit 0 ;; esac
+  DOCKER_SOCK_GID="$(stat -c %g /var/run/docker.sock)"
+  DOCKER_ENABLED=1
+fi
+export DOCKER_SOCK_GID DOCKER_CLI_PATH
 
 # 1b. Optional host-side secrets file (KEY=VALUE lines, e.g.
 #     CLAUDE_CODE_OAUTH_TOKEN=... from `claude setup-token`). Kept outside
@@ -166,6 +226,7 @@ if [ ! -f "$TS_ENV_FILE" ] && [ -t 0 ] && [ ! -e "$TS_NO_PROMPT_MARKER" ]; then
   done
 fi
 COMPOSE_FILES=(-f docker-compose.yml)
+[ -z "$DOCKER_ENABLED" ] || COMPOSE_FILES+=(-f docker-compose.docker.yml)
 TS_ENABLED=""
 TS_HOSTNAME=""
 if [ -f "$TS_ENV_FILE" ]; then
@@ -280,6 +341,7 @@ sudo docker network inspect devbox-net >/dev/null 2>&1 || sudo docker network cr
 compose() {
   sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" \
     TS_ENV_FILE="$TS_ENV_FILE" TS_HOSTNAME="$TS_HOSTNAME" \
+    DOCKER_SOCK_GID="$DOCKER_SOCK_GID" DOCKER_CLI_PATH="$DOCKER_CLI_PATH" \
     docker compose "${COMPOSE_FILES[@]}" "$@"
 }
 # The sidecar has no build section and `up` runs with --pull never, so fetch
@@ -297,12 +359,19 @@ compose up --pull never -d --remove-orphans
 if [ -n "$TS_ENABLED" ] && [ -s ./https-ports ]; then
   ./tsports.sh --apply || true
 fi
+# Give the socket's GID a name inside the box (else the shell prints
+# "groups: cannot find name for group ID"); lost on recreate, so every start.
+if [ -n "$DOCKER_ENABLED" ]; then
+  compose exec -T my-dev-container sudo sh -c \
+    "getent group $DOCKER_SOCK_GID >/dev/null || groupadd -g $DOCKER_SOCK_GID hostdocker"
+fi
 if [ "$HAVE_RUN" = 1 ]; then
   # No TTY allocation unless both stdin and stdout are terminals.
   tty_flag=()
   { [ -t 0 ] && [ -t 1 ]; } || tty_flag=(-T)
   exec sudo env DEV_BOX_WRAPPER=1 DEVBOX_ENV_FILE="$DEVBOX_ENV_FILE" \
     TS_ENV_FILE="$TS_ENV_FILE" TS_HOSTNAME="$TS_HOSTNAME" \
+    DOCKER_SOCK_GID="$DOCKER_SOCK_GID" DOCKER_CLI_PATH="$DOCKER_CLI_PATH" \
     docker compose "${COMPOSE_FILES[@]}" exec "${tty_flag[@]}" my-dev-container bash -lc "$RUN_CMD"
 elif [ "$ENTER" = 1 ]; then
   compose exec my-dev-container tmux new-session -A -s main

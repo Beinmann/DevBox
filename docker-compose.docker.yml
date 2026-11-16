@@ -1,0 +1,21 @@
+# Optional: give the box the Docker daemon of the machine it runs on. Added
+# with `-f` by start.sh / stop_dev_container.sh only when the box dir
+# contains a `.devbox-docker` file (created by `./start.sh --docker`; never
+# edit docker-compose.yml for it). Like the base file it must not be used
+# with `docker compose` directly.
+#
+# WARNING: access to the Docker socket is root-equivalent on whatever
+# machine owns that daemon. start.sh therefore only allows this inside an
+# Incus/LXC instance (the instance is the isolation boundary) and asks for
+# confirmation on every start. NEVER on a normal host.
+x-require-wrapper: "${DEV_BOX_WRAPPER:?Use ./start.sh instead of calling docker compose directly}"
+
+services:
+  my-dev-container:
+    # The socket's GID is read from the socket by the wrapper, not hardcoded
+    # (the 0 fallback only matters for stop_dev_container.sh's `down`).
+    group_add:
+      - "${DOCKER_SOCK_GID:-0}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_CLI_PATH:-/usr/bin/docker}:/usr/local/bin/docker:ro

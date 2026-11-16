@@ -240,6 +240,29 @@ again. Needs Docker Compose 2.24.4+ (`!reset`, `pull --policy`). While Tailscale
 Host header (Vite `allowedHosts`, Django `ALLOWED_HOSTS`) must allow the node
 name.
 
+## Docker inside the devbox (Incus only)
+
+For agents that need `docker run` / `docker build` without touching your real
+host: run DevBox inside an Incus instance (`security.nesting=true`, Docker
+installed in it, `ip-forward-no-drop` in the host's Docker config if the host
+also runs Docker) and enable Docker for individual devboxes there:
+
+    ./start.sh --docker       # remembered in ./.devbox-docker (gitignored)
+    ./start.sh --no-docker    # turn it off again
+
+With it on, the box gets the instance's `/var/run/docker.sock`, the Docker CLI
+(mounted read-only from the instance) and the socket's group (GID read from
+the socket). It is per devbox dir, never global.
+
+- **Every start warns and asks `[y/N]`**; without a terminal it refuses.
+- **Only inside an Incus/LXC instance** (`systemd-detect-virt` must say
+  `lxc`). On a normal host it refuses, since the socket is root-equivalent on
+  the machine that owns the daemon. `DEVBOX_DOCKER_ANYWHERE=1` overrides that.
+- Anything with the socket controls everything in the same daemon: other
+  devboxes of the instance and, if enabled, the Tailscale sidecar (its secret
+  and node key). The Incus instance is the isolation boundary, not the box.
+- `docker compose` (plugin) is not mounted, only the `docker` CLI.
+
 ## Notes
 
 - No ports are published and no host directories other than `./home` and
