@@ -317,6 +317,27 @@ policy allowing only your devices), see ticket 043. The instance node exposes
 every published port of every container, and a box with the Docker socket
 can read its key, so the tailnet policy is the protection.
 
+Setup of the instance node (done on the author's host 2026-11-17, verified):
+
+1. Tailnet policy: add `"tag:incus-docker": ["autogroup:admin"]` to
+   `tagOwners` and the tag to the `dst` of the grant that lets your devices
+   in (e.g. `"dst": ["autogroup:member", "tag:devbox", "tag:incus-docker"]`).
+   There must be no rule with the tag as source and no allow-all rule, so the
+   node can reach nothing.
+2. Admin console: an OAuth client with only auth-key write access, scoped to
+   `tag:incus-docker`.
+3. In the instance: install Tailscale (official apt repo), put
+   `FLAGS="--tun=userspace-networking"` into `/etc/default/tailscaled` and
+   restart `tailscaled` (check `pgrep -a tailscaled` shows the flag).
+4. Join: `read -rsp 'secret: ' K; echo; sudo tailscale up
+   --auth-key="${K}?preauthorized=true&ephemeral=false"
+   --advertise-tags=tag:incus-docker --hostname=incus-docker; unset K`.
+5. Test: `docker run -d --rm --name webtest -p 8099:80 nginx:alpine` in the
+   instance, then `curl -sI http://incus-docker.<tailnet>:8099` from another
+   device answers 200. Outbound must stay blocked: a connect from the
+   instance and from a container (`docker run --rm alpine wget ...`) to a
+   tailnet peer's `100.x` address is refused.
+
 ## Notes
 
 - No ports are published and no host directories other than `./home` and
